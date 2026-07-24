@@ -1,0 +1,2098 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Red Verde</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 14px;
+      touch-action: manipulation;
+    }
+
+    .game {
+      width: min(100%, 1120px);
+      background: white;
+      border-radius: 20px;
+      padding: 18px;
+      text-align: center;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+    }
+
+    .app-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .network-column {
+      min-width: 0;
+    }
+
+    .side-panel {
+      min-width: 0;
+      padding: 14px;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      background: #f9fafb;
+      text-align: left;
+    }
+
+    .side-panel .main-actions {
+      justify-content: stretch;
+      margin-bottom: 16px;
+    }
+
+    .side-panel .main-actions button {
+      flex: 1 1 130px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 27px;
+    }
+
+    p {
+      margin: 0 0 8px;
+      color: #555;
+    }
+
+    .note {
+      margin-bottom: 10px;
+      color: #777;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .network-shell {
+      overflow: hidden;
+      border-radius: 16px;
+      background: #fafafa;
+    }
+
+    .network-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 9px;
+      border-bottom: 1px solid #e5e7eb;
+      background: #fff;
+    }
+
+    .zoom-button {
+      min-width: 42px;
+      min-height: 38px;
+      padding: 7px 11px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      background: #fff;
+      color: #111;
+      font-size: 19px;
+      line-height: 1;
+    }
+
+    .zoom-button:active {
+      background: #e5e7eb;
+    }
+
+    .fit-button {
+      min-width: 76px;
+      font-size: 14px;
+    }
+
+    .network-viewport {
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      background: #fafafa;
+      touch-action: none;
+      cursor: grab;
+    }
+
+    .network-viewport.panning {
+      cursor: grabbing;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      min-height: 420px;
+      background: #fafafa;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .base-line,
+    .segment-overlay,
+    .complete-line-overlay,
+    .line-hitbox {
+      fill: none;
+      stroke-linejoin: round;
+    }
+
+    .base-line {
+      stroke: #111;
+      stroke-width: 7;
+      stroke-linecap: round;
+      pointer-events: none;
+    }
+
+    .segment-overlay {
+      stroke: #16a34a;
+      stroke-width: 7.4;
+      stroke-linecap: round;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.1s ease;
+    }
+
+    .segment-overlay.active {
+      opacity: 1;
+    }
+
+    .complete-line-overlay {
+      stroke: #16a34a;
+      stroke-width: 7.6;
+      stroke-linecap: round;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .complete-line-overlay.active {
+      opacity: 1;
+    }
+
+    .line-hitbox {
+      stroke: transparent;
+      stroke-width: 36;
+      stroke-linecap: round;
+      cursor: pointer;
+    }
+
+    .node {
+      fill: #111;
+      stroke: #fff;
+      stroke-width: 4;
+      cursor: pointer;
+      transition: fill 0.12s ease, transform 0.12s ease;
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+
+    .node:active {
+      transform: scale(1.14);
+    }
+
+    .node.active {
+      fill: #16a34a;
+    }
+
+    .node-label {
+      fill: #111;
+      font-size: 22px;
+      font-weight: 700;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      pointer-events: none;
+      paint-order: stroke;
+      stroke: #fafafa;
+      stroke-width: 7px;
+      stroke-linejoin: round;
+    }
+
+    .distance-button {
+      cursor: pointer;
+    }
+
+    .distance-button-hitbox {
+      fill: transparent;
+      pointer-events: all;
+    }
+
+    .distance-label {
+      fill: #1f2937;
+      font-size: 15px;
+      font-weight: 700;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      pointer-events: none;
+      paint-order: stroke;
+      stroke: #fafafa;
+      stroke-width: 5px;
+      stroke-linejoin: round;
+    }
+
+    #status {
+      min-height: 28px;
+      margin-top: 12px;
+      color: #16a34a;
+      font-weight: 700;
+    }
+
+    .main-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 18px;
+      background: #111;
+      color: white;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .activity-button {
+      background: #16a34a;
+    }
+
+    .delete-activity-button {
+      padding: 7px 10px;
+      background: #e5e7eb;
+      color: #111;
+      font-size: 13px;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(0, 0, 0, 0.45);
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal {
+      width: min(100%, 430px);
+      padding: 20px;
+      background: white;
+      border-radius: 18px;
+      text-align: left;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+    }
+
+    .modal h2 {
+      margin: 0 0 6px;
+      font-size: 22px;
+    }
+
+    .modal-subtitle {
+      margin: 0 0 16px;
+      color: #666;
+      font-size: 14px;
+    }
+
+    .attribute-table {
+      width: 100%;
+      margin-bottom: 18px;
+      border-collapse: collapse;
+    }
+
+    .attribute-table th,
+    .attribute-table td {
+      padding: 11px;
+      border: 1px solid #d1d5db;
+      vertical-align: middle;
+    }
+
+    .attribute-table th {
+      width: 38%;
+      background: #f3f4f6;
+      font-size: 14px;
+    }
+
+    .attribute-table input,
+    .form-field input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #bfc5ce;
+      border-radius: 9px;
+      font-size: 16px;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .form-field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .form-field label {
+      color: #374151;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .form-error {
+      min-height: 20px;
+      margin: -4px 0 12px;
+      color: #b91c1c;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .secondary-button {
+      background: #e5e7eb;
+      color: #111;
+    }
+
+    .activities-panel {
+      display: block;
+      margin-top: 0;
+      text-align: left;
+    }
+
+    .activities-panel h2 {
+      margin: 0 0 10px;
+      font-size: 18px;
+    }
+
+    .activities-empty {
+      margin: 0;
+      padding: 16px 10px;
+      color: #6b7280;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .activities-table-wrapper {
+      overflow-x: auto;
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      background: white;
+    }
+
+    .activities-table {
+      width: 100%;
+      min-width: 0;
+      table-layout: fixed;
+      border-collapse: collapse;
+      background: white;
+    }
+
+    .activities-table th,
+    .activities-table td {
+      padding: 8px 6px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+      font-size: 13px;
+      vertical-align: middle;
+    }
+
+    .activities-table th {
+      background: #f3f4f6;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .activities-table th:nth-child(1),
+    .activities-table td:nth-child(1) {
+      width: 28%;
+    }
+
+    .activities-table th:nth-child(2),
+    .activities-table td:nth-child(2) {
+      width: 20%;
+    }
+
+    .activities-table th:nth-child(3),
+    .activities-table td:nth-child(3) {
+      width: 40%;
+    }
+
+    .activities-table th:nth-child(4),
+    .activities-table td:nth-child(4) {
+      width: 12%;
+      text-align: center;
+    }
+
+    .activities-table tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .activities-table-date-input {
+      width: 100%;
+      min-width: 0;
+      padding: 6px 4px;
+      border: 1px solid #bfc5ce;
+      border-radius: 7px;
+      font-size: 12px;
+      background: white;
+    }
+
+    .activity-direction {
+      overflow-wrap: anywhere;
+      font-weight: 700;
+    }
+
+    .delete-activity-button {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border-radius: 50%;
+      background: #fee2e2;
+      color: #dc2626;
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .delete-activity-button:hover {
+      background: #fecaca;
+    }
+
+    @media (max-width: 820px) {
+      .game {
+        width: min(100%, 640px);
+      }
+
+      .app-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .side-panel {
+        margin-top: 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="game">
+    <h1>Red Verde</h1>
+    <p>Toca nodos y tramos para marcarlos o desmarcarlos.</p>
+
+    <div class="note">
+      Cada tramo representa 6 m. Si sobra distancia, el último tramo puede ser menor.<br>
+      La tabla de atributos se abre <strong>solo</strong> con doble clic o doble toque sobre el texto de la longitud.
+    </div>
+
+    <div class="app-layout">
+      <section class="network-column">
+        <div class="network-shell">
+          <div class="network-toolbar" aria-label="Controles del diagrama">
+            <button
+              id="zoomOutButton"
+              class="zoom-button"
+              type="button"
+              aria-label="Alejar"
+              title="Alejar"
+            >−</button>
+
+            <button
+              id="fitViewButton"
+              class="zoom-button fit-button"
+              type="button"
+              aria-label="Centrar diagrama"
+              title="Centrar diagrama"
+            >Centrar</button>
+
+            <button
+              id="zoomInButton"
+              class="zoom-button"
+              type="button"
+              aria-label="Acercar"
+              title="Acercar"
+            >+</button>
+          </div>
+
+          <div id="networkViewport" class="network-viewport">
+            <svg
+              id="networkSvg"
+              viewBox="0 0 500 600"
+              preserveAspectRatio="xMidYMid meet"
+              aria-label="Red de cinco nodos"
+            >
+              <g id="baseLinesGroup"></g>
+              <g id="segmentOverlaysGroup"></g>
+              <g id="completeLineOverlaysGroup"></g>
+              <g id="lineHitboxesGroup"></g>
+              <g id="distanceLabelsGroup"></g>
+
+              <circle
+                class="node"
+                data-node-id="A"
+                data-active="false"
+                cx="90"
+                cy="130"
+                r="18"
+              />
+              <circle
+                class="node"
+                data-node-id="B"
+                data-active="false"
+                cx="90"
+                cy="300"
+                r="18"
+              />
+              <circle
+                class="node"
+                data-node-id="C"
+                data-active="false"
+                cx="85"
+                cy="490"
+                r="18"
+              />
+              <circle
+                class="node"
+                data-node-id="D"
+                data-active="false"
+                cx="355"
+                cy="130"
+                r="18"
+              />
+              <circle
+                class="node"
+                data-node-id="E"
+                data-active="false"
+                cx="360"
+                cy="302"
+                r="18"
+              />
+
+              <g id="nodeLabelsGroup"></g>
+            </svg>
+          </div>
+        </div>
+
+        <div id="status"></div>
+      </section>
+
+      <aside class="side-panel">
+        <div class="main-actions">
+          <button id="resetButton" type="button">Reiniciar</button>
+          <button id="openActivityButton" class="activity-button" type="button">
+            Registrar actividad
+          </button>
+        </div>
+
+        <section id="activitiesPanel" class="activities-panel" aria-live="polite">
+          <h2>Actividades registradas</h2>
+          <p id="activitiesEmpty" class="activities-empty">
+            Todavía no hay actividades.
+          </p>
+
+          <div id="activitiesTableWrapper" class="activities-table-wrapper">
+            <table class="activities-table">
+              <thead>
+                <tr>
+                  <th>Dir</th>
+                  <th>Long</th>
+                  <th>Fecha</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="activitiesTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <div id="attributeModal" class="modal-backdrop" aria-hidden="true">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <h2 id="modalTitle">Atributos de la línea</h2>
+      <p id="modalSubtitle" class="modal-subtitle"></p>
+
+      <table class="attribute-table">
+        <tbody>
+          <tr>
+            <th scope="row">Diámetro</th>
+            <td>
+              <input
+                id="diameterInput"
+                type="text"
+                placeholder="Ej.: 440 mm"
+                autocomplete="off"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="modal-actions">
+        <button id="cancelAttributesButton" class="secondary-button" type="button">
+          Cancelar
+        </button>
+        <button id="saveAttributesButton" type="button">Guardar</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="activityModal" class="modal-backdrop" aria-hidden="true">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="activityModalTitle">
+      <h2 id="activityModalTitle">Registrar actividad</h2>
+      <p class="modal-subtitle">
+        Indica el tramo ejecutado y la fecha en que se realizó.
+      </p>
+
+      <form id="activityForm" novalidate>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="startCameraInput">Cámara de inicio</label>
+            <input
+              id="startCameraInput"
+              type="text"
+              placeholder="Ej.: C"
+              autocomplete="off"
+              required
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="endCameraInput">Cámara de fin</label>
+            <input
+              id="endCameraInput"
+              type="text"
+              placeholder="Ej.: B"
+              autocomplete="off"
+              required
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="activityLengthInput">Longitud (m)</label>
+            <input
+              id="activityLengthInput"
+              type="number"
+              min="0.01"
+              step="0.01"
+              inputmode="decimal"
+              placeholder="Ej.: 25"
+              required
+            />
+          </div>
+
+          <div class="form-field">
+            <label for="activityDateInput">Fecha</label>
+            <input
+              id="activityDateInput"
+              type="date"
+              required
+            />
+          </div>
+        </div>
+
+        <div id="activityFormError" class="form-error"></div>
+
+        <div class="modal-actions">
+          <button id="cancelActivityButton" class="secondary-button" type="button">
+            Cancelar
+          </button>
+          <button type="submit">Guardar actividad</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <script>
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const MIN_REMAINDER_TOUCH_LENGTH = 28;
+    const DOUBLE_TAP_DELAY = 320;
+    const ACTIVITIES_STORAGE_KEY = "redVerdeActividadesV4";
+
+    const svg = document.getElementById("networkSvg");
+    const networkViewport = document.getElementById("networkViewport");
+    const zoomInButton = document.getElementById("zoomInButton");
+    const zoomOutButton = document.getElementById("zoomOutButton");
+    const fitViewButton = document.getElementById("fitViewButton");
+    const nodeLabelsGroup = document.getElementById("nodeLabelsGroup");
+
+    const baseLinesGroup = document.getElementById("baseLinesGroup");
+    const segmentOverlaysGroup = document.getElementById("segmentOverlaysGroup");
+    const completeLineOverlaysGroup = document.getElementById("completeLineOverlaysGroup");
+    const lineHitboxesGroup = document.getElementById("lineHitboxesGroup");
+    const distanceLabelsGroup = document.getElementById("distanceLabelsGroup");
+
+    const nodes = [...document.querySelectorAll(".node")];
+    const status = document.getElementById("status");
+    const resetButton = document.getElementById("resetButton");
+
+    const attributeModal = document.getElementById("attributeModal");
+    const modalSubtitle = document.getElementById("modalSubtitle");
+    const diameterInput = document.getElementById("diameterInput");
+    const cancelAttributesButton = document.getElementById("cancelAttributesButton");
+    const saveAttributesButton = document.getElementById("saveAttributesButton");
+
+    const openActivityButton = document.getElementById("openActivityButton");
+    const activityModal = document.getElementById("activityModal");
+    const activityForm = document.getElementById("activityForm");
+    const startCameraInput = document.getElementById("startCameraInput");
+    const endCameraInput = document.getElementById("endCameraInput");
+    const activityLengthInput = document.getElementById("activityLengthInput");
+    const activityDateInput = document.getElementById("activityDateInput");
+    const activityFormError = document.getElementById("activityFormError");
+    const cancelActivityButton = document.getElementById("cancelActivityButton");
+    const activitiesPanel = document.getElementById("activitiesPanel");
+    const activitiesEmpty = document.getElementById("activitiesEmpty");
+    const activitiesTableWrapper =
+      document.getElementById("activitiesTableWrapper");
+    const activitiesTableBody = document.getElementById("activitiesTableBody");
+
+    const nodeDefinitions = [
+      { id: "A", x: 90, y: 130, radius: 18 },
+      { id: "B", x: 90, y: 300, radius: 18 },
+      { id: "C", x: 85, y: 490, radius: 18 },
+      { id: "D", x: 355, y: 130, radius: 18 },
+      { id: "E", x: 360, y: 302, radius: 18 }
+    ];
+
+    const lineDefinitions = [
+      { id: "AB", name: "A–B", meters: 24, d: "M90 130 C88 190, 92 245, 90 300" },
+      { id: "BC", name: "B–C", meters: 30, d: "M90 300 C88 360, 86 420, 85 490" },
+      { id: "AD", name: "A–D", meters: 55, d: "M90 130 C170 132, 260 126, 355 130" },
+      { id: "BE", name: "B–E", meters: 52, d: "M90 300 C180 302, 265 298, 360 302" },
+      { id: "D1", name: "Rama superior de D", meters: 12, d: "M355 130 C382 108, 400 87, 430 70" },
+      { id: "D2", name: "Rama inferior de D", meters: 14, d: "M355 130 C382 145, 395 180, 435 190" },
+      { id: "E1", name: "Rama superior de E", meters: 18, d: "M360 302 C385 275, 408 255, 455 225" },
+      { id: "E2", name: "Rama inferior de E", meters: 16, d: "M360 302 C385 320, 400 355, 440 375" }
+    ];
+
+    const routeEdges = [
+      { lineId: "AB", from: "A", to: "B" },
+      { lineId: "BC", from: "B", to: "C" },
+      { lineId: "AD", from: "A", to: "D" },
+      { lineId: "BE", from: "B", to: "E" }
+    ];
+
+    const validCameras = ["A", "B", "C", "D", "E"];
+    const lineStates = new Map();
+    let selectedLineId = null;
+    let activities = [];
+
+    function createSvgElement(tag, attributes = {}) {
+      const element = document.createElementNS(SVG_NS, tag);
+      Object.entries(attributes).forEach(([key, value]) => {
+        element.setAttribute(key, value);
+      });
+      return element;
+    }
+
+    function buildSegmentLengthList(totalMeters) {
+      const fullSegments = Math.floor(totalMeters / 6);
+      const remainder = totalMeters % 6;
+      const lengths = Array(fullSegments).fill(6);
+
+      if (remainder > 0) {
+        lengths.push(remainder);
+      }
+
+      if (lengths.length === 0) {
+        lengths.push(totalMeters);
+      }
+
+      return lengths;
+    }
+
+    function buildSegmentPath(measurePath, startLength, endLength) {
+      const totalLength = measurePath.getTotalLength();
+      const overlap = 0.7;
+      const safeStart = Math.max(0, startLength - overlap);
+      const safeEnd = Math.min(totalLength, endLength + overlap);
+      const visibleLength = Math.max(safeEnd - safeStart, 0.001);
+      const samples = Math.max(10, Math.ceil(visibleLength / 7));
+      const points = [];
+
+      for (let index = 0; index <= samples; index++) {
+        const ratio = index / samples;
+        const currentLength = safeStart + visibleLength * ratio;
+        const point = measurePath.getPointAtLength(currentLength);
+        points.push([point.x, point.y]);
+      }
+
+      return points
+        .map(([x, y], index) => `${index === 0 ? "M" : "L"}${x} ${y}`)
+        .join(" ");
+    }
+
+    function addDistanceButton(path, meters, lineId) {
+      const totalLength = path.getTotalLength();
+      const middleLength = totalLength / 2;
+      const middlePoint = path.getPointAtLength(middleLength);
+
+      const beforePoint = path.getPointAtLength(Math.max(0, middleLength - 2));
+      const afterPoint = path.getPointAtLength(Math.min(totalLength, middleLength + 2));
+
+      const angleRadians = Math.atan2(
+        afterPoint.y - beforePoint.y,
+        afterPoint.x - beforePoint.x
+      );
+
+      let angleDegrees = angleRadians * 180 / Math.PI;
+      if (angleDegrees > 90 || angleDegrees < -90) {
+        angleDegrees += 180;
+      }
+
+      const normalX = -Math.sin(angleRadians);
+      const normalY = Math.cos(angleRadians);
+      const labelOffset = -14;
+      const labelX = middlePoint.x + normalX * labelOffset;
+      const labelY = middlePoint.y + normalY * labelOffset;
+
+      const textValue = `${meters} m`;
+      const buttonGroup = createSvgElement("g", {
+        class: "distance-button",
+        transform: `rotate(${angleDegrees} ${labelX} ${labelY})`
+      });
+
+      const approxWidth = Math.max(44, textValue.length * 9);
+      const hitbox = createSvgElement("rect", {
+        class: "distance-button-hitbox",
+        x: labelX - approxWidth / 2,
+        y: labelY - 14,
+        width: approxWidth,
+        height: 28,
+        rx: 6,
+        ry: 6
+      });
+
+      const label = createSvgElement("text", {
+        class: "distance-label",
+        x: labelX,
+        y: labelY
+      });
+      label.textContent = textValue;
+
+      let tapTimer = null;
+      let lastTapTime = 0;
+
+      buttonGroup.addEventListener("pointerup", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (shouldSuppressNetworkTap(event)) {
+          return;
+        }
+
+        const now = Date.now();
+
+        if (now - lastTapTime <= DOUBLE_TAP_DELAY) {
+          if (tapTimer !== null) {
+            clearTimeout(tapTimer);
+            tapTimer = null;
+          }
+          lastTapTime = 0;
+          openAttributes(lineId);
+          return;
+        }
+
+        lastTapTime = now;
+        tapTimer = setTimeout(() => {
+          tapTimer = null;
+        }, DOUBLE_TAP_DELAY);
+      });
+
+      buttonGroup.appendChild(hitbox);
+      buttonGroup.appendChild(label);
+      distanceLabelsGroup.appendChild(buttonGroup);
+    }
+
+    function svgPointFromPointer(event) {
+      const point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      const matrix = svg.getScreenCTM();
+
+      if (!matrix) {
+        return { x: 0, y: 0 };
+      }
+
+      return point.matrixTransform(matrix.inverse());
+    }
+
+    function closestLengthOnPath(path, targetPoint) {
+      const totalLength = path.getTotalLength();
+      const coarseSteps = 120;
+
+      let bestLength = 0;
+      let bestDistanceSquared = Infinity;
+
+      for (let index = 0; index <= coarseSteps; index++) {
+        const candidateLength = totalLength * (index / coarseSteps);
+        const point = path.getPointAtLength(candidateLength);
+        const dx = point.x - targetPoint.x;
+        const dy = point.y - targetPoint.y;
+        const distanceSquared = dx * dx + dy * dy;
+
+        if (distanceSquared < bestDistanceSquared) {
+          bestDistanceSquared = distanceSquared;
+          bestLength = candidateLength;
+        }
+      }
+
+      let searchRadius = totalLength / coarseSteps;
+
+      for (let iteration = 0; iteration < 12; iteration++) {
+        const leftLength = Math.max(0, bestLength - searchRadius);
+        const rightLength = Math.min(totalLength, bestLength + searchRadius);
+
+        for (const candidateLength of [leftLength, rightLength]) {
+          const point = path.getPointAtLength(candidateLength);
+          const dx = point.x - targetPoint.x;
+          const dy = point.y - targetPoint.y;
+          const distanceSquared = dx * dx + dy * dy;
+
+          if (distanceSquared < bestDistanceSquared) {
+            bestDistanceSquared = distanceSquared;
+            bestLength = candidateLength;
+          }
+        }
+
+        searchRadius /= 2;
+      }
+
+      return bestLength;
+    }
+
+    function getSegmentIndexAtLength(state, selectedSvgLength) {
+      const { definition, segmentLengths, totalSvgLength } = state;
+      const lastIndex = segmentLengths.length - 1;
+      const remainder = definition.meters % 6;
+
+      if (remainder > 0 && lastIndex > 0) {
+        const actualRemainderSvgLength = totalSvgLength * (remainder / definition.meters);
+        const touchRemainderStart = Math.max(
+          0,
+          totalSvgLength - Math.max(MIN_REMAINDER_TOUCH_LENGTH, actualRemainderSvgLength)
+        );
+
+        if (selectedSvgLength >= touchRemainderStart) {
+          return lastIndex;
+        }
+      }
+
+      const selectedMeters = definition.meters * (selectedSvgLength / totalSvgLength);
+      let accumulatedMeters = 0;
+
+      for (let index = 0; index < segmentLengths.length; index++) {
+        accumulatedMeters += segmentLengths[index];
+        if (selectedMeters < accumulatedMeters || index === segmentLengths.length - 1) {
+          return index;
+        }
+      }
+
+      return lastIndex;
+    }
+
+    function isSegmentVisuallyActive(state, index) {
+      return state.activitySegmentCount[index] > 0;
+    }
+
+    function refreshSegmentVisual(state, index) {
+      const overlay = state.segmentOverlays[index];
+      overlay.classList.toggle("active", isSegmentVisuallyActive(state, index));
+    }
+
+    function updateLineCompletion(state) {
+      const allActive = state.segmentOverlays.every((_, index) =>
+        isSegmentVisuallyActive(state, index)
+      );
+      state.completeOverlay.classList.toggle("active", allActive);
+    }
+
+    function refreshLineState(state) {
+      state.segmentOverlays.forEach((_, index) => refreshSegmentVisual(state, index));
+      updateLineCompletion(state);
+    }
+
+    function getManualRecordEndpoints(lineId) {
+      const mapping = {
+        AB: { start: "A", end: "B" },
+        BC: { start: "B", end: "C" },
+        AD: { start: "A", end: "D" },
+        BE: { start: "B", end: "E" },
+        D1: { start: "D", end: "R1" },
+        D2: { start: "D", end: "R2" },
+        E1: { start: "E", end: "R1" },
+        E2: { start: "E", end: "R2" }
+      };
+
+      return mapping[lineId] || { start: "?", end: "?" };
+    }
+
+    function findManualActivityForSegment(lineId, segmentIndex) {
+      return activities.find((activity) =>
+        activity.source === "manual" &&
+        Array.isArray(activity.appliedSegments) &&
+        activity.appliedSegments.length === 1 &&
+        activity.appliedSegments[0].lineId === lineId &&
+        activity.appliedSegments[0].segmentIndex === segmentIndex
+      );
+    }
+
+    function createManualActivity(lineId, segmentIndex) {
+      const state = lineStates.get(lineId);
+      const segmentLength = state.segmentLengths[segmentIndex];
+      const endpoints = getManualRecordEndpoints(lineId);
+
+      return {
+        id:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random()}`,
+        source: "manual",
+        startCamera: endpoints.start,
+        endCamera: endpoints.end,
+        length: Number(segmentLength.toFixed(2)),
+        appliedLength: Number(segmentLength.toFixed(2)),
+        appliedSegments: [
+          {
+            lineId,
+            segmentIndex,
+            segmentLength
+          }
+        ],
+        date: ""
+      };
+    }
+
+    function toggleManualSegment(lineId, segmentIndex) {
+      const existingActivity = findManualActivityForSegment(lineId, segmentIndex);
+
+      if (existingActivity) {
+        activities = activities.filter((activity) => activity.id !== existingActivity.id);
+      } else {
+        activities.push(createManualActivity(lineId, segmentIndex));
+      }
+
+      saveActivities();
+      rebuildActivityMarks();
+      renderActivities();
+    }
+
+    function clearManualSelections() {
+      activities = activities.filter((activity) => activity.source !== "manual");
+      saveActivities();
+      rebuildActivityMarks();
+      renderActivities();
+      status.textContent = "";
+    }
+
+    function openAttributes(lineId) {
+      selectedLineId = lineId;
+      const state = lineStates.get(lineId);
+      modalSubtitle.textContent = `${state.definition.name} · ${state.definition.meters} m`;
+      diameterInput.value = state.attributes.diameter;
+
+      attributeModal.classList.add("open");
+      attributeModal.setAttribute("aria-hidden", "false");
+      setTimeout(() => diameterInput.focus(), 40);
+    }
+
+    function closeAttributes() {
+      selectedLineId = null;
+      attributeModal.classList.remove("open");
+      attributeModal.setAttribute("aria-hidden", "true");
+    }
+
+    function getTodayAsInputDate() {
+      const now = new Date();
+      const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+      return localDate.toISOString().slice(0, 10);
+    }
+
+    function normalizeCameraName(value) {
+      return value.trim().toUpperCase();
+    }
+
+    function loadActivities() {
+      try {
+        const saved = localStorage.getItem(ACTIVITIES_STORAGE_KEY);
+        const parsed = saved ? JSON.parse(saved) : [];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        console.warn("No se pudieron cargar las actividades.", error);
+        return [];
+      }
+    }
+
+    function saveActivities() {
+      try {
+        localStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(activities));
+      } catch (error) {
+        console.warn("No se pudieron guardar las actividades.", error);
+      }
+    }
+
+    function formatActivityDate(dateValue) {
+      if (!dateValue) return "";
+      const [year, month, day] = dateValue.split("-");
+      if (!year || !month || !day) return dateValue;
+      return `${day}.${month}.${year}`;
+    }
+
+    function findPathBetweenCameras(startCamera, endCamera) {
+      const queue = [{ camera: startCamera, path: [] }];
+      const visited = new Set([startCamera]);
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+
+        if (current.camera === endCamera) {
+          return current.path;
+        }
+
+        routeEdges.forEach((edge) => {
+          let nextCamera = null;
+          let forward = true;
+
+          if (edge.from === current.camera) {
+            nextCamera = edge.to;
+            forward = true;
+          } else if (edge.to === current.camera) {
+            nextCamera = edge.from;
+            forward = false;
+          }
+
+          if (!nextCamera || visited.has(nextCamera)) {
+            return;
+          }
+
+          visited.add(nextCamera);
+          queue.push({
+            camera: nextCamera,
+            path: current.path.concat({
+              lineId: edge.lineId,
+              forward
+            })
+          });
+        });
+      }
+
+      return null;
+    }
+
+    
+    function computeAppliedSegments(startCamera, endCamera, requestedLength) {
+      const path = findPathBetweenCameras(startCamera, endCamera);
+
+      if (!path) {
+        return {
+          ok: false,
+          message: "No existe una ruta entre esas dos cámaras en la red actual."
+        };
+      }
+
+      let remainingLength = requestedLength;
+      let appliedLength = 0;
+      const appliedSegments = [];
+
+      outerLoop:
+      for (const step of path) {
+        const state = lineStates.get(step.lineId);
+        const indexes = step.forward
+          ? state.segmentLengths.map((_, index) => index)
+          : state.segmentLengths.map((_, index) => index).reverse();
+
+        for (const segmentIndex of indexes) {
+          const segmentLength = state.segmentLengths[segmentIndex];
+
+          // Si este segmento ya fue cubierto por actividades anteriores,
+          // no consumimos longitud nueva: simplemente seguimos avanzando
+          // hasta el siguiente segmento disponible.
+          if (state.activitySegmentCount[segmentIndex] > 0) {
+            continue;
+          }
+
+          if (remainingLength + 1e-9 >= segmentLength) {
+            appliedSegments.push({
+              lineId: step.lineId,
+              segmentIndex,
+              segmentLength
+            });
+            remainingLength -= segmentLength;
+            appliedLength += segmentLength;
+          } else {
+            break outerLoop;
+          }
+        }
+      }
+
+      return {
+        ok: true,
+        path,
+        appliedSegments,
+        appliedLength: Number(appliedLength.toFixed(2))
+      };
+    }
+
+function clearAllActivityVisualMarks() {
+      lineStates.forEach((state) => {
+        state.activitySegmentCount = state.activitySegmentCount.map(() => 0);
+        refreshLineState(state);
+      });
+    }
+
+    function applyActivityVisualMarks(activity) {
+      if (!Array.isArray(activity.appliedSegments)) return;
+
+      const linesToRefresh = new Set();
+
+      activity.appliedSegments.forEach((segmentInfo) => {
+        const state = lineStates.get(segmentInfo.lineId);
+        if (!state) return;
+
+        const index = segmentInfo.segmentIndex;
+        if (index < 0 || index >= state.activitySegmentCount.length) return;
+
+        state.activitySegmentCount[index] += 1;
+        linesToRefresh.add(segmentInfo.lineId);
+      });
+
+      linesToRefresh.forEach((lineId) => {
+        refreshLineState(lineStates.get(lineId));
+      });
+    }
+
+    
+    function rebuildActivityMarks() {
+      clearAllActivityVisualMarks();
+
+      activities.forEach((activity) => {
+        if (activity.source === "manual") {
+          if (!Array.isArray(activity.appliedSegments)) {
+            activity.appliedSegments = [];
+          }
+
+          activity.appliedLength = Number(
+            activity.appliedSegments.reduce(
+              (sum, segment) => sum + Number(segment.segmentLength || 0),
+              0
+            ).toFixed(2)
+          );
+
+          applyActivityVisualMarks(activity);
+          return;
+        }
+
+        const result = computeAppliedSegments(
+          activity.startCamera,
+          activity.endCamera,
+          activity.length
+        );
+
+        if (result.ok) {
+          activity.appliedSegments = result.appliedSegments;
+          activity.appliedLength = result.appliedLength;
+          applyActivityVisualMarks(activity);
+        } else {
+          activity.appliedSegments = [];
+          activity.appliedLength = 0;
+        }
+      });
+
+      saveActivities();
+      checkVictory();
+    }
+
+    function renderActivities() {
+      activitiesTableBody.innerHTML = "";
+
+      const hasActivities = activities.length > 0;
+      activitiesEmpty.style.display = hasActivities ? "none" : "block";
+      activitiesTableWrapper.style.display = hasActivities ? "block" : "none";
+
+      activities.forEach((activity) => {
+        const row = document.createElement("tr");
+
+        const directionCell = document.createElement("td");
+        directionCell.className = "activity-direction";
+        directionCell.textContent =
+          `${activity.startCamera} → ${activity.endCamera}`;
+
+        const lengthCell = document.createElement("td");
+        lengthCell.textContent =
+          `${activity.appliedLength ?? activity.length ?? 0} m`;
+
+        const dateCell = document.createElement("td");
+        const dateInput = document.createElement("input");
+        dateInput.type = "date";
+        dateInput.className = "activities-table-date-input";
+        dateInput.value = activity.date || "";
+
+        dateInput.addEventListener("change", () => {
+          activity.date = dateInput.value;
+          saveActivities();
+        });
+
+        dateCell.appendChild(dateInput);
+
+        const actionsCell = document.createElement("td");
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "delete-activity-button";
+        deleteButton.textContent = "×";
+        deleteButton.title = "Eliminar actividad";
+        deleteButton.setAttribute(
+          "aria-label",
+          `Eliminar actividad ${activity.startCamera} a ${activity.endCamera}`
+        );
+
+        deleteButton.addEventListener("click", () => {
+          activities = activities.filter(
+            (item) => item.id !== activity.id
+          );
+
+          saveActivities();
+          rebuildActivityMarks();
+          renderActivities();
+        });
+
+        actionsCell.appendChild(deleteButton);
+
+        row.appendChild(directionCell);
+        row.appendChild(lengthCell);
+        row.appendChild(dateCell);
+        row.appendChild(actionsCell);
+
+        activitiesTableBody.appendChild(row);
+      });
+    }
+
+    function openActivityModal() {
+      activityForm.reset();
+      activityFormError.textContent = "";
+      activityDateInput.value = getTodayAsInputDate();
+      activityModal.classList.add("open");
+      activityModal.setAttribute("aria-hidden", "false");
+      setTimeout(() => startCameraInput.focus(), 40);
+    }
+
+    function closeActivityModal() {
+      activityModal.classList.remove("open");
+      activityModal.setAttribute("aria-hidden", "true");
+      activityFormError.textContent = "";
+    }
+
+    function registerActivity(event) {
+      event.preventDefault();
+
+      const startCamera = normalizeCameraName(startCameraInput.value);
+      const endCamera = normalizeCameraName(endCameraInput.value);
+      const lengthValue = Number(activityLengthInput.value);
+      const date = activityDateInput.value;
+
+      if (!startCamera || !endCamera) {
+        activityFormError.textContent =
+          "Debes escribir la cámara de inicio y la cámara de fin.";
+        return;
+      }
+
+      if (!validCameras.includes(startCamera) || !validCameras.includes(endCamera)) {
+        activityFormError.textContent =
+          "Por ahora las cámaras válidas son: A, B, C, D y E.";
+        return;
+      }
+
+      if (startCamera === endCamera) {
+        activityFormError.textContent =
+          "La cámara de inicio y la cámara de fin no pueden ser la misma.";
+        return;
+      }
+
+      if (!Number.isFinite(lengthValue) || lengthValue <= 0) {
+        activityFormError.textContent =
+          "La longitud debe ser un número mayor que cero.";
+        return;
+      }
+
+      if (!date) {
+        activityFormError.textContent =
+          "Debes seleccionar una fecha.";
+        return;
+      }
+
+      const result = computeAppliedSegments(startCamera, endCamera, lengthValue);
+
+      if (!result.ok) {
+        activityFormError.textContent = result.message;
+        return;
+      }
+
+      const activity = {
+        id:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random()}`,
+        source: "registered",
+        startCamera,
+        endCamera,
+        length: Number(lengthValue.toFixed(2)),
+        appliedLength: result.appliedLength,
+        appliedSegments: result.appliedSegments,
+        date
+      };
+
+      activities.push(activity);
+      saveActivities();
+      rebuildActivityMarks();
+      renderActivities();
+      closeActivityModal();
+    }
+
+    const INITIAL_VIEW_BOX = {
+      x: 0,
+      y: 0,
+      width: 500,
+      height: 600
+    };
+
+    const MIN_VIEW_BOX_WIDTH = 125;
+    const MAX_VIEW_BOX_WIDTH = 1000;
+    const activePointers = new Map();
+
+    let currentViewBox = { ...INITIAL_VIEW_BOX };
+    let panPointerId = null;
+    let pinchDistance = null;
+    let multiTouchGesture = false;
+    let suppressTapUntil = 0;
+
+    function applyViewBox() {
+      svg.setAttribute(
+        "viewBox",
+        `${currentViewBox.x} ${currentViewBox.y} ` +
+        `${currentViewBox.width} ${currentViewBox.height}`
+      );
+    }
+
+    function clampViewBox() {
+      const aspect = INITIAL_VIEW_BOX.height / INITIAL_VIEW_BOX.width;
+      currentViewBox.width = Math.min(
+        MAX_VIEW_BOX_WIDTH,
+        Math.max(MIN_VIEW_BOX_WIDTH, currentViewBox.width)
+      );
+      currentViewBox.height = currentViewBox.width * aspect;
+
+      const horizontalMargin = currentViewBox.width * 0.35;
+      const verticalMargin = currentViewBox.height * 0.35;
+
+      const minX = INITIAL_VIEW_BOX.x - horizontalMargin;
+      const maxX =
+        INITIAL_VIEW_BOX.x +
+        INITIAL_VIEW_BOX.width -
+        currentViewBox.width +
+        horizontalMargin;
+
+      const minY = INITIAL_VIEW_BOX.y - verticalMargin;
+      const maxY =
+        INITIAL_VIEW_BOX.y +
+        INITIAL_VIEW_BOX.height -
+        currentViewBox.height +
+        verticalMargin;
+
+      currentViewBox.x = Math.min(
+        Math.max(currentViewBox.x, Math.min(minX, maxX)),
+        Math.max(minX, maxX)
+      );
+
+      currentViewBox.y = Math.min(
+        Math.max(currentViewBox.y, Math.min(minY, maxY)),
+        Math.max(minY, maxY)
+      );
+    }
+
+    function clientPointToSvg(clientX, clientY) {
+      const point = svg.createSVGPoint();
+      point.x = clientX;
+      point.y = clientY;
+
+      const matrix = svg.getScreenCTM();
+
+      if (!matrix) {
+        return {
+          x: currentViewBox.x + currentViewBox.width / 2,
+          y: currentViewBox.y + currentViewBox.height / 2
+        };
+      }
+
+      return point.matrixTransform(matrix.inverse());
+    }
+
+    function zoomAroundPoint(factor, centerPoint) {
+      const previousWidth = currentViewBox.width;
+      const proposedWidth = previousWidth * factor;
+      const boundedWidth = Math.min(
+        MAX_VIEW_BOX_WIDTH,
+        Math.max(MIN_VIEW_BOX_WIDTH, proposedWidth)
+      );
+      const actualFactor = boundedWidth / previousWidth;
+
+      currentViewBox.x =
+        centerPoint.x -
+        (centerPoint.x - currentViewBox.x) * actualFactor;
+
+      currentViewBox.y =
+        centerPoint.y -
+        (centerPoint.y - currentViewBox.y) * actualFactor;
+
+      currentViewBox.width = boundedWidth;
+      currentViewBox.height *= actualFactor;
+
+      clampViewBox();
+      applyViewBox();
+    }
+
+    function zoomFromCenter(factor) {
+      zoomAroundPoint(factor, {
+        x: currentViewBox.x + currentViewBox.width / 2,
+        y: currentViewBox.y + currentViewBox.height / 2
+      });
+    }
+
+    function resetView() {
+      currentViewBox = { ...INITIAL_VIEW_BOX };
+      applyViewBox();
+    }
+
+    function pointerDistance(pointerA, pointerB) {
+      return Math.hypot(
+        pointerA.clientX - pointerB.clientX,
+        pointerA.clientY - pointerB.clientY
+      );
+    }
+
+    function isInteractiveNetworkTarget(target) {
+      return Boolean(
+        target.closest(
+          ".line-hitbox, .node, .distance-button, .zoom-button"
+        )
+      );
+    }
+
+    function shouldSuppressNetworkTap(event) {
+      const pointer = activePointers.get(event.pointerId);
+
+      return (
+        Date.now() < suppressTapUntil ||
+        multiTouchGesture ||
+        Boolean(pointer && pointer.moved)
+      );
+    }
+
+    function markPointerMoved(pointer) {
+      const distanceFromStart = Math.hypot(
+        pointer.clientX - pointer.startX,
+        pointer.clientY - pointer.startY
+      );
+
+      if (distanceFromStart > 6) {
+        pointer.moved = true;
+        suppressTapUntil = Date.now() + 350;
+      }
+    }
+
+    function setupZoomAndPan() {
+      zoomInButton.addEventListener("click", () => {
+        zoomFromCenter(0.8);
+      });
+
+      zoomOutButton.addEventListener("click", () => {
+        zoomFromCenter(1.25);
+      });
+
+      fitViewButton.addEventListener("click", resetView);
+
+      svg.addEventListener("pointerdown", (event) => {
+        const pointer = {
+          pointerId: event.pointerId,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          lastX: event.clientX,
+          lastY: event.clientY,
+          startX: event.clientX,
+          startY: event.clientY,
+          moved: false,
+          canPan: !isInteractiveNetworkTarget(event.target)
+        };
+
+        activePointers.set(event.pointerId, pointer);
+
+        if (activePointers.size === 1 && pointer.canPan) {
+          panPointerId = event.pointerId;
+          networkViewport.classList.add("panning");
+
+          try {
+            svg.setPointerCapture(event.pointerId);
+          } catch (error) {
+            // Algunos visores no permiten pointer capture.
+          }
+        }
+
+        if (activePointers.size === 2) {
+          multiTouchGesture = true;
+          panPointerId = null;
+          networkViewport.classList.add("panning");
+
+          const pointers = [...activePointers.values()];
+          pinchDistance = pointerDistance(pointers[0], pointers[1]);
+
+          pointers.forEach((item) => {
+            try {
+              svg.setPointerCapture(item.pointerId);
+            } catch (error) {
+              // El gesto sigue funcionando aunque no haya pointer capture.
+            }
+          });
+        }
+      });
+
+      svg.addEventListener("pointermove", (event) => {
+        const pointer = activePointers.get(event.pointerId);
+
+        if (!pointer) {
+          return;
+        }
+
+        pointer.clientX = event.clientX;
+        pointer.clientY = event.clientY;
+        markPointerMoved(pointer);
+
+        if (activePointers.size >= 2) {
+          event.preventDefault();
+          multiTouchGesture = true;
+          suppressTapUntil = Date.now() + 400;
+
+          const pointers = [...activePointers.values()].slice(0, 2);
+          const newDistance = pointerDistance(
+            pointers[0],
+            pointers[1]
+          );
+
+          if (pinchDistance && newDistance > 0) {
+            const centerClientX =
+              (pointers[0].clientX + pointers[1].clientX) / 2;
+            const centerClientY =
+              (pointers[0].clientY + pointers[1].clientY) / 2;
+
+            const centerPoint = clientPointToSvg(
+              centerClientX,
+              centerClientY
+            );
+
+            zoomAroundPoint(
+              pinchDistance / newDistance,
+              centerPoint
+            );
+          }
+
+          pinchDistance = newDistance;
+
+          pointers.forEach((item) => {
+            item.lastX = item.clientX;
+            item.lastY = item.clientY;
+          });
+
+          return;
+        }
+
+        if (
+          panPointerId === event.pointerId &&
+          pointer.canPan
+        ) {
+          event.preventDefault();
+
+          const rect = svg.getBoundingClientRect();
+          const deltaClientX = pointer.clientX - pointer.lastX;
+          const deltaClientY = pointer.clientY - pointer.lastY;
+
+          currentViewBox.x -=
+            deltaClientX * (currentViewBox.width / rect.width);
+
+          currentViewBox.y -=
+            deltaClientY * (currentViewBox.height / rect.height);
+
+          clampViewBox();
+          applyViewBox();
+
+          pointer.lastX = pointer.clientX;
+          pointer.lastY = pointer.clientY;
+        }
+      });
+
+      function finishPointer(event) {
+        const pointer = activePointers.get(event.pointerId);
+
+        if (pointer) {
+          markPointerMoved(pointer);
+        }
+
+        activePointers.delete(event.pointerId);
+
+        if (panPointerId === event.pointerId) {
+          panPointerId = null;
+        }
+
+        if (activePointers.size < 2) {
+          pinchDistance = null;
+        }
+
+        if (activePointers.size === 0) {
+          multiTouchGesture = false;
+          networkViewport.classList.remove("panning");
+        }
+      }
+
+      svg.addEventListener("pointerup", finishPointer);
+      svg.addEventListener("pointercancel", finishPointer);
+      svg.addEventListener("pointerleave", (event) => {
+        if (activePointers.has(event.pointerId)) {
+          finishPointer(event);
+        }
+      });
+
+      svg.addEventListener(
+        "wheel",
+        (event) => {
+          event.preventDefault();
+
+          const centerPoint = clientPointToSvg(
+            event.clientX,
+            event.clientY
+          );
+
+          zoomAroundPoint(
+            event.deltaY < 0 ? 0.88 : 1.14,
+            centerPoint
+          );
+        },
+        { passive: false }
+      );
+    }
+
+    function estimateLabelBox(textValue, centerX, centerY) {
+      const width = Math.max(28, textValue.length * 15 + 12);
+      const height = 30;
+
+      return {
+        x: centerX - width / 2,
+        y: centerY - height / 2,
+        width,
+        height
+      };
+    }
+
+    function rectanglesOverlap(first, second, padding = 0) {
+      return !(
+        first.x + first.width + padding < second.x ||
+        second.x + second.width + padding < first.x ||
+        first.y + first.height + padding < second.y ||
+        second.y + second.height + padding < first.y
+      );
+    }
+
+    function pointInsideBox(point, box, padding = 0) {
+      return (
+        point.x >= box.x - padding &&
+        point.x <= box.x + box.width + padding &&
+        point.y >= box.y - padding &&
+        point.y <= box.y + box.height + padding
+      );
+    }
+
+    function labelCollisionScore(box, placedBoxes) {
+      let score = 0;
+
+      if (
+        box.x < 8 ||
+        box.y < 8 ||
+        box.x + box.width > 492 ||
+        box.y + box.height > 592
+      ) {
+        score += 10000;
+      }
+
+      nodeDefinitions.forEach((node) => {
+        const nodeBox = {
+          x: node.x - node.radius - 5,
+          y: node.y - node.radius - 5,
+          width: (node.radius + 5) * 2,
+          height: (node.radius + 5) * 2
+        };
+
+        if (rectanglesOverlap(box, nodeBox, 2)) {
+          score += 5000;
+        }
+      });
+
+      placedBoxes.forEach((placedBox) => {
+        if (rectanglesOverlap(box, placedBox, 5)) {
+          score += 7000;
+        }
+      });
+
+      lineStates.forEach((state) => {
+        const pathLength = state.measurePath.getTotalLength();
+
+        for (
+          let currentLength = 0;
+          currentLength <= pathLength;
+          currentLength += 5
+        ) {
+          const point =
+            state.measurePath.getPointAtLength(currentLength);
+
+          if (pointInsideBox(point, box, 4)) {
+            score += 350;
+          }
+        }
+      });
+
+      return score;
+    }
+
+    function positionNodeLabels() {
+      nodeLabelsGroup.innerHTML = "";
+      const placedBoxes = [];
+
+      const candidateOffsets = [
+        { x: -34, y: -34 },
+        { x: 34, y: -34 },
+        { x: -34, y: 34 },
+        { x: 34, y: 34 },
+        { x: 0, y: -42 },
+        { x: 44, y: 0 },
+        { x: -44, y: 0 },
+        { x: 0, y: 42 }
+      ];
+
+      nodeDefinitions.forEach((node) => {
+        let bestCandidate = null;
+
+        candidateOffsets.forEach((offset, candidateIndex) => {
+          const x = node.x + offset.x;
+          const y = node.y + offset.y;
+          const box = estimateLabelBox(node.id, x, y);
+          const score =
+            labelCollisionScore(box, placedBoxes) +
+            candidateIndex * 2;
+
+          if (
+            bestCandidate === null ||
+            score < bestCandidate.score
+          ) {
+            bestCandidate = {
+              x,
+              y,
+              box,
+              score
+            };
+          }
+        });
+
+        const label = createSvgElement("text", {
+          class: "node-label",
+          x: bestCandidate.x,
+          y: bestCandidate.y,
+          "data-node-label": node.id
+        });
+
+        label.textContent = node.id;
+        nodeLabelsGroup.appendChild(label);
+        placedBoxes.push(bestCandidate.box);
+      });
+    }
+
+    function buildLine(definition) {
+      const basePath = createSvgElement("path", {
+        class: "base-line",
+        d: definition.d
+      });
+      baseLinesGroup.appendChild(basePath);
+
+      const measurePath = createSvgElement("path", {
+        d: definition.d,
+        fill: "none",
+        stroke: "none"
+      });
+      svg.appendChild(measurePath);
+
+      const totalSvgLength = measurePath.getTotalLength();
+      const segmentLengths = buildSegmentLengthList(definition.meters);
+
+      const completeOverlay = createSvgElement("path", {
+        class: "complete-line-overlay",
+        d: definition.d
+      });
+      completeLineOverlaysGroup.appendChild(completeOverlay);
+
+      const state = {
+        definition,
+        measurePath,
+        totalSvgLength,
+        segmentLengths,
+        segmentOverlays: [],
+        activitySegmentCount: segmentLengths.map(() => 0),
+        completeOverlay,
+        attributes: { diameter: "" }
+      };
+
+      let accumulatedMeters = 0;
+
+      segmentLengths.forEach((segmentMeters) => {
+        const startMeters = accumulatedMeters;
+        const endMeters = accumulatedMeters + segmentMeters;
+
+        const startSvgLength = totalSvgLength * (startMeters / definition.meters);
+        const endSvgLength = totalSvgLength * (endMeters / definition.meters);
+
+        const overlay = createSvgElement("path", {
+          class: "segment-overlay",
+          d: buildSegmentPath(measurePath, startSvgLength, endSvgLength)
+        });
+
+        state.segmentOverlays.push(overlay);
+        segmentOverlaysGroup.appendChild(overlay);
+        accumulatedMeters = endMeters;
+      });
+
+      const hitbox = createSvgElement("path", {
+        class: "line-hitbox",
+        d: definition.d
+      });
+      lineHitboxesGroup.appendChild(hitbox);
+
+      lineStates.set(definition.id, state);
+      addDistanceButton(measurePath, definition.meters, definition.id);
+
+      hitbox.addEventListener("pointerup", (event) => {
+        event.preventDefault();
+
+        if (shouldSuppressNetworkTap(event)) {
+          return;
+        }
+
+        const pointerPoint = svgPointFromPointer(event);
+        const selectedLength = closestLengthOnPath(measurePath, pointerPoint);
+        const segmentIndex = getSegmentIndexAtLength(state, selectedLength);
+
+        toggleManualSegment(definition.id, segmentIndex);
+      });
+    }
+
+    function toggleNode(node) {
+      const isActive = node.dataset.active === "true";
+      node.dataset.active = isActive ? "false" : "true";
+      node.classList.toggle("active", !isActive);
+      checkVictory();
+    }
+
+    function checkVictory() {
+      const allNodesActive = nodes.every(node => node.dataset.active === "true");
+      const allSegmentsActive = [...lineStates.values()].every((state) =>
+        state.segmentOverlays.every((_, index) => isSegmentVisuallyActive(state, index))
+      );
+
+      status.textContent = allNodesActive && allSegmentsActive ? "¡Red completada!" : "";
+    }
+
+    nodes.forEach((node) => {
+      node.addEventListener("pointerup", (event) => {
+        if (shouldSuppressNetworkTap(event)) {
+          return;
+        }
+
+        toggleNode(node);
+      });
+    });
+
+    lineDefinitions.forEach(buildLine);
+    positionNodeLabels();
+    setupZoomAndPan();
+    applyViewBox();
+
+    activities = loadActivities().map((activity) => ({
+      source: "registered",
+      date: "",
+      ...activity
+    }));
+    rebuildActivityMarks();
+    renderActivities();
+
+    resetButton.addEventListener("click", () => {
+      nodes.forEach((node) => {
+        node.dataset.active = "false";
+        node.classList.remove("active");
+      });
+
+      clearManualSelections();
+      checkVictory();
+    });
+
+    saveAttributesButton.addEventListener("click", () => {
+      if (selectedLineId === null) return;
+
+      const state = lineStates.get(selectedLineId);
+      state.attributes.diameter = diameterInput.value.trim();
+      closeAttributes();
+    });
+
+    cancelAttributesButton.addEventListener("click", closeAttributes);
+    openActivityButton.addEventListener("click", openActivityModal);
+    cancelActivityButton.addEventListener("click", closeActivityModal);
+    activityForm.addEventListener("submit", registerActivity);
+
+    attributeModal.addEventListener("pointerdown", (event) => {
+      if (event.target === attributeModal) {
+        closeAttributes();
+      }
+    });
+
+    activityModal.addEventListener("pointerdown", (event) => {
+      if (event.target === activityModal) {
+        closeActivityModal();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+
+      if (attributeModal.classList.contains("open")) {
+        closeAttributes();
+      }
+
+      if (activityModal.classList.contains("open")) {
+        closeActivityModal();
+      }
+    });
+  </script>
+</body>
+</html>
