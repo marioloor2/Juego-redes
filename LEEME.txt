@@ -1,0 +1,12 @@
+RED VERDE - PUBLICACIÓN WEB
+
+Contenido:
+- index.html: aplicación completa.
+
+Para usarla correctamente en iPad:
+1. Publica index.html en un servicio web estático, por ejemplo GitHub Pages.
+2. Abre el enlace publicado desde Safari.
+3. En Safari, usa Compartir > Añadir a pantalla de inicio.
+
+El visor de archivos de ChatGPT puede mostrar el HTML, pero no ejecuta toda la
+lógica JavaScript necesaria para dibujar y utilizar la red.
