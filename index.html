@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Red Verde · AutoCAD PDF esquemático</title>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0; min-height: 100vh; font-family: Arial, sans-serif; background: #f3f4f6;
+      display: flex; justify-content: center; align-items: center; padding: 14px; touch-action: manipulation;
+    }
+    .app {
+      width: min(100%, 1240px); background: #fff; border-radius: 20px; padding: 18px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.12);
+    }
+    h1 { margin: 0 0 4px; text-align: center; font-size: 27px; }
+    .subtitle { margin: 0 0 8px; text-align: center; color: #555; }
+    .note { margin: 0 0 12px; text-align: center; color: #6b7280; font-size: 13px; line-height: 1.4; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; align-items: start; }
+    .network-col { min-width: 0; }
+    .side { min-width: 0; padding: 14px; border: 1px solid #e5e7eb; border-radius: 16px; background: #f9fafb; text-align: left; }
+    .network-shell { overflow: hidden; border-radius: 16px; background: #fafafa; border: 1px solid #e5e7eb; }
+    .toolbar { display: flex; justify-content: flex-end; gap: 8px; padding: 9px; border-bottom: 1px solid #e5e7eb; background: #fff; }
+    .zoom-btn { min-width: 42px; min-height: 38px; padding: 7px 11px; border: 1px solid #d1d5db; border-radius: 10px; background: #fff; color: #111; font-size: 19px; line-height: 1; cursor: pointer; }
+    .fit-btn { min-width: 76px; font-size: 14px; }
+    .viewport { position: relative; overflow: hidden; width: 100%; background: #fafafa; touch-action: none; cursor: grab; }
+    .viewport.panning { cursor: grabbing; }
+    svg { display: block; width: 100%; height: auto; min-height: 760px; background: #fafafa; user-select: none; touch-action: none; }
+    .base-line, .segment-overlay, .full-overlay, .hit { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .base-line { stroke: #111; stroke-width: 5.2; pointer-events: none; }
+    .base-line.branch { stroke-width: 3.4; }
+    .segment-overlay { stroke: #16a34a; stroke-width: 6; pointer-events: none; opacity: 0; transition: opacity .12s ease; }
+    .segment-overlay.branch { stroke-width: 4.2; }
+    .segment-overlay.active { opacity: 1; }
+    .full-overlay { stroke: #16a34a; stroke-width: 6.2; pointer-events: none; opacity: 0; }
+    .full-overlay.branch { stroke-width: 4.4; }
+    .full-overlay.active { opacity: 1; }
+    .hit { stroke: transparent; stroke-width: 24; cursor: pointer; }
+    .camera-ring { fill: none; stroke: #dc2626; stroke-width: 2.1; pointer-events: none; }
+    .node { fill: #111; stroke: #fff; stroke-width: 2.5; cursor: pointer; transition: fill .12s ease, transform .12s ease; transform-box: fill-box; transform-origin: center; }
+    .node.main { stroke: #111; stroke-width: 0; }
+    .node:active { transform: scale(1.1); }
+    .node.active { fill: #16a34a; }
+    .node-label { fill: #111; font-weight: 700; text-anchor: middle; dominant-baseline: middle; pointer-events: all; cursor: pointer; user-select: none; paint-order: stroke; stroke: #fafafa; stroke-width: 6px; stroke-linejoin: round; }
+    .node-label.main { font-size: 16px; }
+    .node-label.terminal { font-size: 11px; font-weight: 600; fill: #1f2937; stroke-width: 4px; }
+    .distance-group { cursor: pointer; }
+    .distance-hit { fill: transparent; pointer-events: all; }
+    .distance-text { font-weight: 700; fill: #6b7280; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: #fafafa; stroke-width: 3.5px; stroke-linejoin: round; opacity: .85; }
+    .distance-text.collector { font-size: 11px; }
+    .distance-text.branch { font-size: 9px; opacity: .62; }
+    .segment-guides { opacity: 0; pointer-events: none; transition: opacity .15s ease; }
+    .segment-guides.visible { opacity: 1; }
+    .segment-guide { stroke: #9ca3af; stroke-width: 1.6; }
+    #status { min-height: 28px; margin-top: 12px; color: #16a34a; font-weight: 700; text-align: center; }
+    .filter-panel { padding: 12px; border: 1px solid #d1d5db; border-radius: 12px; background: rgba(255,255,255,.96); }
+    .filter-panel h2 { margin: 0 0 10px; font-size: 17px; }
+    .filter-row { display: flex; align-items: center; gap: 9px; color: #1f2937; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .filter-row input { width: 18px; height: 18px; margin: 0; accent-color: #16a34a; cursor: pointer; }
+    .model-filter-object { overflow: visible; }
+    .model-filter-ui { width: 100%; height: 100%; font-family: Arial, sans-serif; pointer-events: auto; }
+    .model-filter-panel { margin: 0; width: 100%; box-shadow: 0 5px 16px rgba(0,0,0,.12); }
+    .model-filter-stack { display: grid; gap: 8px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .actions button { flex: 1 1 130px; }
+    button { border: 0; border-radius: 12px; padding: 12px 18px; background: #111; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
+    .activity-btn { background: #16a34a; }
+    .panel h2 { margin: 0 0 10px; font-size: 18px; }
+    .activities-empty { margin: 0; padding: 16px 10px; color: #6b7280; text-align: center; font-size: 14px; }
+    .table-wrap { overflow-x: auto; border: 1px solid #d1d5db; border-radius: 12px; background: #fff; }
+    .activities { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; background: #fff; }
+    .activities th, .activities td { padding: 8px 6px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 13px; vertical-align: middle; }
+    .activities th { background: #f3f4f6; font-size: 12px; text-transform: uppercase; letter-spacing: .02em; }
+    .activities th:nth-child(1), .activities td:nth-child(1) { width: 28%; }
+    .activities th:nth-child(2), .activities td:nth-child(2) { width: 20%; }
+    .activities th:nth-child(3), .activities td:nth-child(3) { width: 40%; }
+    .activities th:nth-child(4), .activities td:nth-child(4) { width: 12%; text-align: center; }
+    .activities tbody tr:last-child td { border-bottom: 0; }
+    .date-input { width: 100%; min-width: 0; padding: 6px 4px; border: 1px solid #bfc5ce; border-radius: 7px; font-size: 12px; background: #fff; }
+    .activity-dir { overflow-wrap: anywhere; font-weight: 700; }
+    .delete-btn { width: 28px; height: 28px; padding: 0; border-radius: 50%; background: #fee2e2; color: #dc2626; font-size: 18px; font-weight: 800; line-height: 1; }
+    .backdrop { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(0,0,0,.45); }
+    .backdrop.open { display: flex; }
+    .modal { width: min(100%, 430px); padding: 20px; background: #fff; border-radius: 18px; text-align: left; box-shadow: 0 18px 60px rgba(0,0,0,.28); }
+    .modal h2 { margin: 0 0 6px; font-size: 22px; }
+    .modal-subtitle { margin: 0 0 16px; color: #666; font-size: 14px; }
+    .attr-table { width: 100%; margin-bottom: 18px; border-collapse: collapse; }
+    .attr-table th, .attr-table td { padding: 11px; border: 1px solid #d1d5db; vertical-align: middle; }
+    .attr-table th { width: 38%; background: #f3f4f6; font-size: 14px; }
+    .attr-table input, .form-field input { width: 100%; padding: 10px; border: 1px solid #bfc5ce; border-radius: 9px; font-size: 16px; }
+    .form-grid { display: grid; gap: 14px; margin-bottom: 18px; }
+    .form-field { display: grid; gap: 6px; }
+    .form-field label { color: #374151; font-size: 14px; font-weight: 700; }
+    .form-error { min-height: 20px; margin: -4px 0 12px; color: #b91c1c; font-size: 14px; font-weight: 700; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .secondary { background: #e5e7eb; color: #111; }
+    @media (max-width: 920px) { .app { width: min(100%, 720px); } .layout { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>Red Verde</h1>
+    <p class="subtitle">Modelo esquemático desde el PDF de AutoCAD</p>
+    <div class="note">Esta versión prioriza la claridad visual sobre la escala exacta. Las cámaras tienen un anillo rojo fino y, al acercarte lo suficiente, aparecerán guías grises cada 6 m. El registro no permite superar la longitud disponible.</div>
+
+    <div class="layout">
+      <section class="network-col">
+        <div class="network-shell">
+          <div class="toolbar" aria-label="Controles del diagrama">
+            <button id="zoomOutButton" class="zoom-btn" type="button">−</button>
+            <button id="fitViewButton" class="zoom-btn fit-btn" type="button">Centrar</button>
+            <button id="zoomInButton" class="zoom-btn" type="button">+</button>
+          </div>
+          <div id="networkViewport" class="viewport">
+            <svg id="networkSvg" viewBox="-110 34.53 1092.19 1370.95" preserveAspectRatio="xMidYMid meet" aria-label="Red esquemática desde AutoCAD">
+              <g id="baseLinesGroup"></g>
+              <g id="segmentGuidesGroup"></g>
+              <g id="segmentOverlaysGroup"></g>
+              <g id="fullLineOverlaysGroup"></g>
+              <g id="lineHitboxesGroup"></g>
+              <g id="distanceLabelsGroup"></g>
+              <g id="nodesGroup"></g>
+              <g id="labelsGroup"></g>
+
+              <foreignObject
+                id="modelFiltersObject"
+                class="model-filter-object"
+                x="-92"
+                y="44"
+                width="205"
+                height="118"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml" class="model-filter-ui">
+                  <section class="filter-panel model-filter-panel" aria-label="Filtros de visualización">
+                    <h2>Filtros</h2>
+                    <div class="model-filter-stack">
+                      <label class="filter-row" for="labelsFilterCheckbox">
+                        <input id="labelsFilterCheckbox" type="checkbox" checked />
+                        <span>Cámaras / sumideros</span>
+                      </label>
+                    </div>
+                  </section>
+                </div>
+              </foreignObject>
+            </svg>
+          </div>
+        </div>
+        <div id="status"></div>
+      </section>
+
+      <aside class="side">
+        <div class="actions">
+          <button id="resetButton" type="button">Reiniciar</button>
+          <button id="openActivityButton" class="activity-btn" type="button">Registrar actividad</button>
+        </div>
+        <section class="panel" aria-live="polite">
+          <h2>Actividades registradas</h2>
+          <p id="activitiesEmpty" class="activities-empty">Todavía no hay actividades.</p>
+          <div id="activitiesWrapper" class="table-wrap">
+            <table class="activities">
+              <thead><tr><th>Dir</th><th>Long</th><th>Fecha</th><th></th></tr></thead>
+              <tbody id="activitiesBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <div id="attributeModal" class="backdrop" aria-hidden="true">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="attrTitle">
+      <h2 id="attrTitle">Atributos de la línea</h2>
+      <p id="attrSubtitle" class="modal-subtitle"></p>
+      <table class="attr-table">
+        <tbody>
+          <tr><th scope="row">Longitud</th><td><input id="lineLengthInput" type="text" inputmode="decimal" placeholder="Ej.: 38,87" autocomplete="off" /></td></tr>
+          <tr><th scope="row">Diámetro</th><td><input id="diameterInput" type="text" placeholder="Ej.: 440 mm" autocomplete="off" /></td></tr>
+        </tbody>
+      </table>
+      <div id="attributeFormError" class="form-error"></div>
+      <div class="modal-actions"><button id="cancelAttrButton" class="secondary" type="button">Cancelar</button><button id="saveAttrButton" type="button">Guardar</button></div>
+    </section>
+  </div>
+
+  <div id="nodeNameModal" class="backdrop" aria-hidden="true">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="nodeNameTitle">
+      <h2 id="nodeNameTitle">Editar designación</h2>
+      <p id="nodeNameSubtitle" class="modal-subtitle"></p>
+      <div class="form-field">
+        <label for="nodeNameInput">Nombre</label>
+        <input id="nodeNameInput" type="text" autocomplete="off" placeholder="Ej.: CA1 o X1" />
+      </div>
+      <div id="nodeNameError" class="form-error"></div>
+      <div class="modal-actions">
+        <button id="cancelNodeNameButton" class="secondary" type="button">Cancelar</button>
+        <button id="saveNodeNameButton" type="button">Guardar</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="activityModal" class="backdrop" aria-hidden="true">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="activityTitle">
+      <h2 id="activityTitle">Registrar actividad</h2>
+      <p class="modal-subtitle">Indica el tramo ejecutado y la fecha en que se realizó.</p>
+      <form id="activityForm" novalidate>
+        <div class="form-grid">
+          <div class="form-field"><label for="startCameraInput">Cámara de inicio</label><input id="startCameraInput" type="text" placeholder="Ej.: CA5" autocomplete="off" required /></div>
+          <div class="form-field"><label for="endCameraInput">Cámara de fin</label><input id="endCameraInput" type="text" placeholder="Ej.: CA11" autocomplete="off" required /></div>
+          <div class="form-field"><label for="activityLengthInput">Longitud (m)</label><input id="activityLengthInput" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="Ej.: 25" required /></div>
+          <div class="form-field"><label for="activityDateInput">Fecha</label><input id="activityDateInput" type="date" required /></div>
+        </div>
+        <div id="activityFormError" class="form-error"></div>
+        <div class="modal-actions"><button id="cancelActivityButton" class="secondary" type="button">Cancelar</button><button type="submit">Guardar actividad</button></div>
+      </form>
+    </section>
+  </div>
+
+  <script>
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const STORAGE_KEY = "redVerde_autocad_pdf_distancias_reales_v1";
+    const LINE_SETTINGS_KEY = "redVerde_autocad_line_settings_v1";
+    const NODE_SETTINGS_KEY = "redVerde_autocad_node_settings_v1";
+    const FILTER_SETTINGS_KEY = "redVerde_autocad_filter_settings_v1";
+    const DOUBLE_TAP_DELAY = 320;
+    const MIN_REMAINDER_TOUCH_LENGTH = 22;
+    const GUIDE_VISIBILITY_RATIO = 0.58;
+
+    const nodeDefs = [{"id": "CA1", "x": 238.11, "y": 142.26, "radius": 12, "main": true, "showLabel": true}, {"id": "CA5", "x": 238.14, "y": 1085.72, "radius": 12, "main": true, "showLabel": true}, {"id": "CA2", "x": 238.16, "y": 378.15, "radius": 12, "main": true, "showLabel": true}, {"id": "CA3", "x": 238.17, "y": 613.94, "radius": 12, "main": true, "showLabel": true}, {"id": "CA4", "x": 238.19, "y": 850.31, "radius": 12, "main": true, "showLabel": true}, {"id": "CA7", "x": 731.01, "y": 122.09, "radius": 12, "main": true, "showLabel": true}, {"id": "CA8", "x": 764.74, "y": 356.6, "radius": 12, "main": true, "showLabel": true}, {"id": "CA9", "x": 798.84, "y": 591.1, "radius": 12, "main": true, "showLabel": true}, {"id": "CA10", "x": 833.78, "y": 825.61, "radius": 12, "main": true, "showLabel": true}, {"id": "CA11", "x": 867.41, "y": 1060.19, "radius": 12, "main": true, "showLabel": true}, {"id": "X1", "x": 288.48, "y": 80.15, "radius": 6, "main": false, "parent": "CA1", "showLabel": true}, {"id": "X2", "x": 166.52, "y": 149.92, "radius": 6, "main": false, "parent": "CA1", "showLabel": true}, {"id": "X3", "x": 282.81, "y": 201.92, "radius": 6, "main": false, "parent": "CA1", "showLabel": true}, {"id": "X4", "x": 286.41, "y": 1021.89, "radius": 6, "main": false, "parent": "CA5", "showLabel": true}, {"id": "X5", "x": 284.86, "y": 1142.63, "radius": 6, "main": false, "parent": "CA5", "showLabel": true}, {"id": "X6", "x": 167.38, "y": 1099.0, "radius": 6, "main": false, "parent": "CA5", "showLabel": true}, {"id": "X7", "x": 285.89, "y": 312.08, "radius": 6, "main": false, "parent": "CA2", "showLabel": true}, {"id": "X8", "x": 287.44, "y": 431.28, "radius": 6, "main": false, "parent": "CA2", "showLabel": true}, {"id": "X9", "x": 166.37, "y": 383.67, "radius": 6, "main": false, "parent": "CA2", "showLabel": true}, {"id": "X10", "x": 286.39, "y": 549.25, "radius": 6, "main": false, "parent": "CA3", "showLabel": true}, {"id": "X11", "x": 284.85, "y": 669.99, "radius": 6, "main": false, "parent": "CA3", "showLabel": true}, {"id": "X12", "x": 166.21, "y": 611.51, "radius": 6, "main": false, "parent": "CA3", "showLabel": true}, {"id": "X13", "x": 287.43, "y": 786.95, "radius": 6, "main": false, "parent": "CA4", "showLabel": true}, {"id": "X14", "x": 284.33, "y": 906.66, "radius": 6, "main": false, "parent": "CA4", "showLabel": true}, {"id": "X15", "x": 166.79, "y": 841.06, "radius": 6, "main": false, "parent": "CA4", "showLabel": true}, {"id": "X16", "x": 667.86, "y": 76.53, "radius": 6, "main": false, "parent": "CA7", "showLabel": true}, {"id": "X17", "x": 802.79, "y": 127.73, "radius": 6, "main": false, "parent": "CA7", "showLabel": true}, {"id": "X18", "x": 681.24, "y": 174.12, "radius": 6, "main": false, "parent": "CA7", "showLabel": true}, {"id": "X19", "x": 705.89, "y": 307.6, "radius": 6, "main": false, "parent": "CA8", "showLabel": true}, {"id": "X20", "x": 828.79, "y": 389.5, "radius": 6, "main": false, "parent": "CA8", "showLabel": true}, {"id": "X21", "x": 712.55, "y": 406.2, "radius": 6, "main": false, "parent": "CA8", "showLabel": true}, {"id": "X22", "x": 739.65, "y": 541.76, "radius": 6, "main": false, "parent": "CA9", "showLabel": true}, {"id": "X23", "x": 855.01, "y": 636.14, "radius": 6, "main": false, "parent": "CA9", "showLabel": true}, {"id": "X24", "x": 754.5, "y": 647.83, "radius": 6, "main": false, "parent": "CA9", "showLabel": true}, {"id": "X25", "x": 773.6, "y": 775.41, "radius": 6, "main": false, "parent": "CA10", "showLabel": true}, {"id": "X26", "x": 905.38, "y": 833.24, "radius": 6, "main": false, "parent": "CA10", "showLabel": true}, {"id": "X27", "x": 789.23, "y": 882.17, "radius": 6, "main": false, "parent": "CA10", "showLabel": true}, {"id": "X28", "x": 806.5, "y": 1009.0, "radius": 6, "main": false, "parent": "CA11", "showLabel": true}, {"id": "X29", "x": 934.19, "y": 1033.26, "radius": 6, "main": false, "parent": "CA11", "showLabel": true}, {"id": "X30", "x": 820.23, "y": 1114.58, "radius": 6, "main": false, "parent": "CA11", "showLabel": true}, {"id": "X31", "x": 238.31, "y": 1351.48, "radius": 5, "main": false, "parent": "CA5", "showLabel": true}, {"id": "X32", "x": 893.74, "y": 1324.84, "radius": 5, "main": false, "parent": "CA11", "showLabel": true}];
+    const lineDefs = [{"id": "C_CA1_CA2", "name": "CA1-CA2", "from": "CA1", "to": "CA2", "meters": 38.87, "provisional": false, "kind": "collector", "d": "M 238.11 142.26 L 238.16 378.15", "hasDistance": true}, {"id": "C_CA2_CA3", "name": "CA2-CA3", "from": "CA2", "to": "CA3", "meters": 38.85, "provisional": false, "kind": "collector", "d": "M 238.16 378.15 L 238.17 613.94", "hasDistance": true}, {"id": "C_CA3_CA4", "name": "CA3-CA4", "from": "CA3", "to": "CA4", "meters": 38.95, "provisional": false, "kind": "collector", "d": "M 238.17 613.94 L 238.19 850.31", "hasDistance": true}, {"id": "C_CA4_CA5", "name": "CA4-CA5", "from": "CA4", "to": "CA5", "meters": 38.78, "provisional": false, "kind": "collector", "d": "M 238.19 850.31 L 238.14 1085.72", "hasDistance": true}, {"id": "C_CA7_CA8", "name": "CA7-CA8", "from": "CA7", "to": "CA8", "meters": 32.08, "provisional": false, "kind": "collector", "d": "M 731.01 122.09 L 764.74 356.6", "hasDistance": true}, {"id": "C_CA8_CA9", "name": "CA8-CA9", "from": "CA8", "to": "CA9", "meters": 38.86, "provisional": false, "kind": "collector", "d": "M 764.74 356.6 L 798.84 591.1", "hasDistance": true}, {"id": "C_CA9_CA10", "name": "CA9-CA10", "from": "CA9", "to": "CA10", "meters": 38.87, "provisional": false, "kind": "collector", "d": "M 798.84 591.1 L 833.78 825.61", "hasDistance": true}, {"id": "C_CA10_CA11", "name": "CA10-CA11", "from": "CA10", "to": "CA11", "meters": 38.85, "provisional": false, "kind": "collector", "d": "M 833.78 825.61 L 867.41 1060.19", "hasDistance": true}, {"id": "C_CA5_CA11", "name": "CA5-CA11", "from": "CA5", "to": "CA11", "meters": 78.58, "provisional": false, "kind": "collector", "d": "M 238.14 1085.72 L 867.41 1060.19", "hasDistance": true}, {"id": "C_CA5_EXT_L", "name": "CA5-X31", "from": "CA5", "to": "X31", "meters": 38.81, "provisional": false, "kind": "collector", "d": "M 238.14 1085.72 L 238.31 1351.48", "hasDistance": true}, {"id": "C_CA11_EXT_R", "name": "CA11-X32", "from": "CA11", "to": "X32", "meters": 38.85, "provisional": false, "kind": "collector", "d": "M 867.41 1060.19 L 893.74 1324.84", "hasDistance": true}, {"id": "T_CA1_CA1_1", "name": "CA1-X1", "from": "CA1", "to": "X1", "meters": 6.52, "provisional": false, "kind": "branch", "d": "M 238.11 142.26 L 288.48 80.15", "hasDistance": true}, {"id": "T_CA1_CA1_2", "name": "CA1-X2", "from": "CA1", "to": "X2", "meters": 5.27, "provisional": false, "kind": "branch", "d": "M 238.11 142.26 L 166.52 149.92", "hasDistance": true}, {"id": "T_CA1_CA1_3", "name": "CA1-X3", "from": "CA1", "to": "X3", "meters": 6.04, "provisional": false, "kind": "branch", "d": "M 238.11 142.26 L 282.81 201.92", "hasDistance": true}, {"id": "T_CA5_CA5_1", "name": "CA5-X4", "from": "CA5", "to": "X4", "meters": 6.57, "provisional": false, "kind": "branch", "d": "M 238.14 1085.72 L 286.41 1021.89", "hasDistance": true}, {"id": "T_CA5_CA5_2", "name": "CA5-X5", "from": "CA5", "to": "X5", "meters": 5.9, "provisional": false, "kind": "branch", "d": "M 238.14 1085.72 L 284.86 1142.63", "hasDistance": true}, {"id": "T_CA5_CA5_3", "name": "CA5-X6", "from": "CA5", "to": "X6", "meters": 5.43, "provisional": false, "kind": "branch", "d": "M 238.14 1085.72 L 167.38 1099.0", "hasDistance": true}, {"id": "T_CA2_CA2_1", "name": "CA2-X7", "from": "CA2", "to": "X7", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.16 378.15 L 285.89 312.08", "hasDistance": false}, {"id": "T_CA2_CA2_2", "name": "CA2-X8", "from": "CA2", "to": "X8", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.16 378.15 L 287.44 431.28", "hasDistance": false}, {"id": "T_CA2_CA2_3", "name": "CA2-X9", "from": "CA2", "to": "X9", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.16 378.15 L 166.37 383.67", "hasDistance": false}, {"id": "T_CA3_CA3_1", "name": "CA3-X10", "from": "CA3", "to": "X10", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.17 613.94 L 286.39 549.25", "hasDistance": false}, {"id": "T_CA3_CA3_2", "name": "CA3-X11", "from": "CA3", "to": "X11", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.17 613.94 L 284.85 669.99", "hasDistance": false}, {"id": "T_CA3_CA3_3", "name": "CA3-X12", "from": "CA3", "to": "X12", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.17 613.94 L 166.21 611.51", "hasDistance": false}, {"id": "T_CA4_CA4_1", "name": "CA4-X13", "from": "CA4", "to": "X13", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.19 850.31 L 287.43 786.95", "hasDistance": false}, {"id": "T_CA4_CA4_2", "name": "CA4-X14", "from": "CA4", "to": "X14", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.19 850.31 L 284.33 906.66", "hasDistance": false}, {"id": "T_CA4_CA4_3", "name": "CA4-X15", "from": "CA4", "to": "X15", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.19 850.31 L 166.79 841.06", "hasDistance": false}, {"id": "T_CA7_CA7_1", "name": "CA7-X16", "from": "CA7", "to": "X16", "meters": null, "provisional": false, "kind": "branch", "d": "M 731.01 122.09 L 667.86 76.53", "hasDistance": false}, {"id": "T_CA7_CA7_2", "name": "CA7-X17", "from": "CA7", "to": "X17", "meters": null, "provisional": false, "kind": "branch", "d": "M 731.01 122.09 L 802.79 127.73", "hasDistance": false}, {"id": "T_CA7_CA7_3", "name": "CA7-X18", "from": "CA7", "to": "X18", "meters": null, "provisional": false, "kind": "branch", "d": "M 731.01 122.09 L 681.24 174.12", "hasDistance": false}, {"id": "T_CA8_CA8_1", "name": "CA8-X19", "from": "CA8", "to": "X19", "meters": null, "provisional": false, "kind": "branch", "d": "M 764.74 356.6 L 705.89 307.6", "hasDistance": false}, {"id": "T_CA8_CA8_2", "name": "CA8-X20", "from": "CA8", "to": "X20", "meters": null, "provisional": false, "kind": "branch", "d": "M 764.74 356.6 L 828.79 389.5", "hasDistance": false}, {"id": "T_CA8_CA8_3", "name": "CA8-X21", "from": "CA8", "to": "X21", "meters": null, "provisional": false, "kind": "branch", "d": "M 764.74 356.6 L 712.55 406.2", "hasDistance": false}, {"id": "T_CA9_CA9_1", "name": "CA9-X22", "from": "CA9", "to": "X22", "meters": 6.31, "provisional": false, "kind": "branch", "d": "M 798.84 591.1 L 739.65 541.76", "hasDistance": true}, {"id": "T_CA9_CA9_2", "name": "CA9-X23", "from": "CA9", "to": "X23", "meters": 4.06, "provisional": false, "kind": "branch", "d": "M 798.84 591.1 L 855.01 636.14", "hasDistance": true}, {"id": "T_CA9_CA9_3", "name": "CA9-X24", "from": "CA9", "to": "X24", "meters": 5.77, "provisional": false, "kind": "branch", "d": "M 798.84 591.1 L 754.5 647.83", "hasDistance": true}, {"id": "T_CA10_CA10_1", "name": "CA10-X25", "from": "CA10", "to": "X25", "meters": null, "provisional": false, "kind": "branch", "d": "M 833.78 825.61 L 773.6 775.41", "hasDistance": false}, {"id": "T_CA10_CA10_2", "name": "CA10-X26", "from": "CA10", "to": "X26", "meters": null, "provisional": false, "kind": "branch", "d": "M 833.78 825.61 L 905.38 833.24", "hasDistance": false}, {"id": "T_CA10_CA10_3", "name": "CA10-X27", "from": "CA10", "to": "X27", "meters": null, "provisional": false, "kind": "branch", "d": "M 833.78 825.61 L 789.23 882.17", "hasDistance": false}, {"id": "T_CA11_CA11_1", "name": "CA11-X28", "from": "CA11", "to": "X28", "meters": null, "provisional": false, "kind": "branch", "d": "M 867.41 1060.19 L 806.5 1009.0", "hasDistance": false}, {"id": "T_CA11_CA11_2", "name": "CA11-X29", "from": "CA11", "to": "X29", "meters": null, "provisional": false, "kind": "branch", "d": "M 867.41 1060.19 L 934.19 1033.26", "hasDistance": false}, {"id": "T_CA11_CA11_3", "name": "CA11-X30", "from": "CA11", "to": "X30", "meters": null, "provisional": false, "kind": "branch", "d": "M 867.41 1060.19 L 820.23 1114.58", "hasDistance": false}];
+    const routeEdges = [{"lineId": "C_CA1_CA2", "from": "CA1", "to": "CA2"}, {"lineId": "C_CA2_CA3", "from": "CA2", "to": "CA3"}, {"lineId": "C_CA3_CA4", "from": "CA3", "to": "CA4"}, {"lineId": "C_CA4_CA5", "from": "CA4", "to": "CA5"}, {"lineId": "C_CA7_CA8", "from": "CA7", "to": "CA8"}, {"lineId": "C_CA8_CA9", "from": "CA8", "to": "CA9"}, {"lineId": "C_CA9_CA10", "from": "CA9", "to": "CA10"}, {"lineId": "C_CA10_CA11", "from": "CA10", "to": "CA11"}, {"lineId": "C_CA5_CA11", "from": "CA5", "to": "CA11"}];
+
+    function hasKnownLength(def) {
+      return def.hasDistance !== false && Number.isFinite(Number(def.meters)) && Number(def.meters) > 0;
+    }
+
+    function formatLength(value) {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return "";
+      return Number(number.toFixed(2)).toString().replace(".", ",");
+    }
+
+    function parseLength(value) {
+      const normalized = String(value ?? "").trim().replace(",", ".");
+      if (!normalized) return NaN;
+      return Number(normalized);
+    }
+
+    function loadLineSettings() {
+      try {
+        const saved = localStorage.getItem(LINE_SETTINGS_KEY);
+        const parsed = saved ? JSON.parse(saved) : {};
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+
+    const savedLineSettings = loadLineSettings();
+    lineDefs.forEach(def => {
+      const saved = savedLineSettings[def.id];
+      if (!saved) return;
+      if (Number.isFinite(Number(saved.meters)) && Number(saved.meters) > 0) {
+        def.meters = Number(saved.meters);
+        def.hasDistance = true;
+      }
+    });
+
+    function loadNodeSettings() {
+      try {
+        const saved = localStorage.getItem(NODE_SETTINGS_KEY);
+        const parsed = saved ? JSON.parse(saved) : {};
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+
+    const savedNodeSettings = loadNodeSettings();
+    nodeDefs.forEach(node => {
+      const saved = savedNodeSettings[node.id];
+      node.displayName = typeof saved?.displayName === 'string' && saved.displayName.trim()
+        ? saved.displayName.trim()
+        : node.id;
+    });
+
+    const svg = document.getElementById("networkSvg");
+    const viewport = document.getElementById("networkViewport");
+    const zoomInButton = document.getElementById("zoomInButton");
+    const zoomOutButton = document.getElementById("zoomOutButton");
+    const fitViewButton = document.getElementById("fitViewButton");
+    const baseLinesGroup = document.getElementById("baseLinesGroup");
+    const segmentGuidesGroup = document.getElementById("segmentGuidesGroup");
+    const segmentOverlaysGroup = document.getElementById("segmentOverlaysGroup");
+    const fullLineOverlaysGroup = document.getElementById("fullLineOverlaysGroup");
+    const lineHitboxesGroup = document.getElementById("lineHitboxesGroup");
+    const distanceLabelsGroup = document.getElementById("distanceLabelsGroup");
+    const nodesGroup = document.getElementById("nodesGroup");
+    const labelsGroup = document.getElementById("labelsGroup");
+    const status = document.getElementById("status");
+    const resetButton = document.getElementById("resetButton");
+    const labelsFilterCheckbox = document.getElementById("labelsFilterCheckbox");
+
+    const nodeNameModal = document.getElementById("nodeNameModal");
+    const nodeNameSubtitle = document.getElementById("nodeNameSubtitle");
+    const nodeNameInput = document.getElementById("nodeNameInput");
+    const nodeNameError = document.getElementById("nodeNameError");
+    const cancelNodeNameButton = document.getElementById("cancelNodeNameButton");
+    const saveNodeNameButton = document.getElementById("saveNodeNameButton");
+
+    const attributeModal = document.getElementById("attributeModal");
+    const attrSubtitle = document.getElementById("attrSubtitle");
+    const lineLengthInput = document.getElementById("lineLengthInput");
+    const diameterInput = document.getElementById("diameterInput");
+    const attributeFormError = document.getElementById("attributeFormError");
+    const cancelAttrButton = document.getElementById("cancelAttrButton");
+    const saveAttrButton = document.getElementById("saveAttrButton");
+
+    const openActivityButton = document.getElementById("openActivityButton");
+    const activityModal = document.getElementById("activityModal");
+    const activityForm = document.getElementById("activityForm");
+    const startCameraInput = document.getElementById("startCameraInput");
+    const endCameraInput = document.getElementById("endCameraInput");
+    const activityLengthInput = document.getElementById("activityLengthInput");
+    const activityDateInput = document.getElementById("activityDateInput");
+    const activityFormError = document.getElementById("activityFormError");
+    const cancelActivityButton = document.getElementById("cancelActivityButton");
+    const activitiesEmpty = document.getElementById("activitiesEmpty");
+    const activitiesWrapper = document.getElementById("activitiesWrapper");
+    const activitiesBody = document.getElementById("activitiesBody");
+
+    const nodeMap = new Map(nodeDefs.map(n => [n.id, n]));
+    const validCameras = nodeDefs.filter(n => n.main).map(n => n.id);
+    const lineStates = new Map();
+    let activities = [];
+    let selectedLineId = null;
+    let selectedNodeId = null;
+
+    const INITIAL_VIEW_BOX = { x: -110, y: 34.53, width: 1092.19, height: 1370.95 };
+    const MIN_VIEW_BOX_WIDTH = INITIAL_VIEW_BOX.width * 0.24;
+    const MAX_VIEW_BOX_WIDTH = INITIAL_VIEW_BOX.width * 1.7;
+    const activePointers = new Map();
+    let currentViewBox = { ...INITIAL_VIEW_BOX };
+    let panPointerId = null;
+    let pinchDistance = null;
+    let multiTouchGesture = false;
+    let suppressTapUntil = 0;
+
+    function E(tag, attrs={}) {
+      const el = document.createElementNS(SVG_NS, tag);
+      Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v));
+      return el;
+    }
+
+    function lengths(totalMeters) {
+      const total = Number(totalMeters);
+      if (!Number.isFinite(total) || total <= 0) return [null];
+      const full = Math.floor(total / 6);
+      const remainder = Number((total - full * 6).toFixed(2));
+      const result = Array(full).fill(6);
+      if (remainder > 0.000001) result.push(remainder);
+      if (!result.length) result.push(total);
+      return result;
+    }
+
+    function poly(measure, startLen, endLen) {
+      const total = measure.getTotalLength();
+      const overlap = 0.8;
+      const safeStart = Math.max(0, startLen - overlap);
+      const safeEnd = Math.min(total, endLen + overlap);
+      const visible = Math.max(safeEnd - safeStart, 0.001);
+      const samples = Math.max(10, Math.ceil(visible / 8));
+      const points = [];
+      for (let i=0; i<=samples; i++) {
+        const l = safeStart + visible * (i / samples);
+        const p = measure.getPointAtLength(l);
+        points.push([p.x, p.y]);
+      }
+      return points.map(([x,y], i) => `${i===0?'M':'L'}${x} ${y}`).join(' ');
+    }
+
+    function addDistanceLabel(measure, def) {
+      if (!hasKnownLength(def)) return null;
+      const total = measure.getTotalLength();
+      const m = total / 2;
+      const p = measure.getPointAtLength(m);
+      const before = measure.getPointAtLength(Math.max(0, m - 2));
+      const after = measure.getPointAtLength(Math.min(total, m + 2));
+      const ang = Math.atan2(after.y - before.y, after.x - before.x);
+      let deg = ang * 180 / Math.PI;
+      if (deg > 90 || deg < -90) deg += 180;
+      const nx = -Math.sin(ang), ny = Math.cos(ang);
+      const offset = def.kind === 'branch' ? -16 : -14;
+      const x = p.x + nx * offset, y = p.y + ny * offset;
+      const textValue = `${formatLength(def.meters)} m`;
+      const group = E('g', { class: 'distance-group', transform: `rotate(${deg} ${x} ${y})`, 'data-line-id': def.id });
+      const width = Math.max(34, textValue.length * 7.8);
+      const hit = E('rect', { class: 'distance-hit', x: x - width/2, y: y - 10, width, height: 20, rx: 5, ry: 5 });
+      const label = E('text', { class: `distance-text ${def.kind}`, x, y });
+      label.textContent = textValue;
+      let timer = null;
+      let lastTap = 0;
+      group.addEventListener('pointerup', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (shouldSuppressTap(event)) return;
+        const now = Date.now();
+        if (now - lastTap <= DOUBLE_TAP_DELAY) {
+          if (timer) clearTimeout(timer);
+          timer = null;
+          lastTap = 0;
+          openAttributes(def.id);
+          return;
+        }
+        lastTap = now;
+        timer = setTimeout(() => { timer = null; }, DOUBLE_TAP_DELAY);
+      });
+      group.append(hit, label);
+      distanceLabelsGroup.appendChild(group);
+      return group;
+    }
+
+    function addSegmentGuides(measure, def) {
+      const group = E('g', { class: 'segment-guides', 'data-line-id': def.id });
+      segmentGuidesGroup.appendChild(group);
+      if (!hasKnownLength(def)) return group;
+
+      const lens = lengths(def.meters);
+      const total = measure.getTotalLength();
+      let acc = 0;
+      for (let i=0; i<lens.length-1; i++) {
+        acc += lens[i];
+        const l = total * (acc / def.meters);
+        const p = measure.getPointAtLength(l);
+        const before = measure.getPointAtLength(Math.max(0, l - 1.5));
+        const after = measure.getPointAtLength(Math.min(total, l + 1.5));
+        const dx = after.x - before.x, dy = after.y - before.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const nx = -dy / d, ny = dx / d;
+        const half = def.kind === 'collector' ? 6 : 4.8;
+        const tick = E('line', { class: 'segment-guide', x1: p.x - nx*half, y1: p.y - ny*half, x2: p.x + nx*half, y2: p.y + ny*half });
+        group.appendChild(tick);
+      }
+      return group;
+    }
+
+    function applyViewBox() {
+      svg.setAttribute('viewBox', `${currentViewBox.x} ${currentViewBox.y} ${currentViewBox.width} ${currentViewBox.height}`);
+      updateGuideVisibility();
+    }
+
+    function updateGuideVisibility() {
+      const show = currentViewBox.width <= INITIAL_VIEW_BOX.width * GUIDE_VISIBILITY_RATIO;
+      document.querySelectorAll('.segment-guides').forEach(g => g.classList.toggle('visible', show));
+    }
+
+    function clampViewBox() {
+      const aspect = INITIAL_VIEW_BOX.height / INITIAL_VIEW_BOX.width;
+      currentViewBox.width = Math.min(MAX_VIEW_BOX_WIDTH, Math.max(MIN_VIEW_BOX_WIDTH, currentViewBox.width));
+      currentViewBox.height = currentViewBox.width * aspect;
+      const hMargin = currentViewBox.width * 0.35;
+      const vMargin = currentViewBox.height * 0.35;
+      const minX = INITIAL_VIEW_BOX.x - hMargin;
+      const maxX = INITIAL_VIEW_BOX.x + INITIAL_VIEW_BOX.width - currentViewBox.width + hMargin;
+      const minY = INITIAL_VIEW_BOX.y - vMargin;
+      const maxY = INITIAL_VIEW_BOX.y + INITIAL_VIEW_BOX.height - currentViewBox.height + vMargin;
+      currentViewBox.x = Math.min(Math.max(currentViewBox.x, Math.min(minX,maxX)), Math.max(minX,maxX));
+      currentViewBox.y = Math.min(Math.max(currentViewBox.y, Math.min(minY,maxY)), Math.max(minY,maxY));
+    }
+
+    function clientToSvg(clientX, clientY) {
+      const p = svg.createSVGPoint(); p.x = clientX; p.y = clientY;
+      const m = svg.getScreenCTM();
+      if (!m) return { x: currentViewBox.x + currentViewBox.width/2, y: currentViewBox.y + currentViewBox.height/2 };
+      return p.matrixTransform(m.inverse());
+    }
+
+    function zoomAroundPoint(factor, center) {
+      const prevW = currentViewBox.width;
+      const boundedW = Math.min(MAX_VIEW_BOX_WIDTH, Math.max(MIN_VIEW_BOX_WIDTH, prevW * factor));
+      const actual = boundedW / prevW;
+      currentViewBox.x = center.x - (center.x - currentViewBox.x) * actual;
+      currentViewBox.y = center.y - (center.y - currentViewBox.y) * actual;
+      currentViewBox.width = boundedW; currentViewBox.height *= actual;
+      clampViewBox(); applyViewBox();
+    }
+
+    function resetView() { currentViewBox = { ...INITIAL_VIEW_BOX }; applyViewBox(); }
+
+    function isInteractiveTarget(target) {
+      return Boolean(target.closest('.hit, .node, .node-label, .distance-group, .zoom-btn, .model-filter-ui'));
+    }
+
+    function markPointerMoved(pointer) {
+      const dist = Math.hypot(pointer.clientX - pointer.startX, pointer.clientY - pointer.startY);
+      if (dist > 6) { pointer.moved = true; suppressTapUntil = Date.now() + 350; }
+    }
+
+    function shouldSuppressTap(event) {
+      const p = activePointers.get(event.pointerId);
+      return Date.now() < suppressTapUntil || multiTouchGesture || Boolean(p && p.moved);
+    }
+
+    function setupZoomPan() {
+      zoomInButton.addEventListener('click', () => zoomAroundPoint(0.8, { x: currentViewBox.x + currentViewBox.width/2, y: currentViewBox.y + currentViewBox.height/2 }));
+      zoomOutButton.addEventListener('click', () => zoomAroundPoint(1.25, { x: currentViewBox.x + currentViewBox.width/2, y: currentViewBox.y + currentViewBox.height/2 }));
+      fitViewButton.addEventListener('click', resetView);
+
+      svg.addEventListener('pointerdown', (event) => {
+        const pointer = { pointerId:event.pointerId, clientX:event.clientX, clientY:event.clientY, lastX:event.clientX, lastY:event.clientY, startX:event.clientX, startY:event.clientY, moved:false, canPan:!isInteractiveTarget(event.target) };
+        activePointers.set(event.pointerId, pointer);
+        if (activePointers.size === 1 && pointer.canPan) { panPointerId = event.pointerId; viewport.classList.add('panning'); try { svg.setPointerCapture(event.pointerId); } catch {} }
+        if (activePointers.size === 2) {
+          multiTouchGesture = true; panPointerId = null; viewport.classList.add('panning');
+          const pts = [...activePointers.values()];
+          pinchDistance = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
+          pts.forEach(item => { try { svg.setPointerCapture(item.pointerId); } catch {} });
+        }
+      });
+
+      svg.addEventListener('pointermove', (event) => {
+        const pointer = activePointers.get(event.pointerId); if (!pointer) return;
+        pointer.clientX = event.clientX; pointer.clientY = event.clientY; markPointerMoved(pointer);
+        if (activePointers.size >= 2) {
+          event.preventDefault(); multiTouchGesture = true; suppressTapUntil = Date.now() + 400;
+          const pts = [...activePointers.values()].slice(0,2);
+          const newDist = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
+          if (pinchDistance && newDist > 0) {
+            const center = clientToSvg((pts[0].clientX + pts[1].clientX)/2, (pts[0].clientY + pts[1].clientY)/2);
+            zoomAroundPoint(pinchDistance / newDist, center);
+          }
+          pinchDistance = newDist; pts.forEach(item => { item.lastX = item.clientX; item.lastY = item.clientY; }); return;
+        }
+        if (panPointerId === event.pointerId && pointer.canPan) {
+          event.preventDefault();
+          const rect = svg.getBoundingClientRect();
+          currentViewBox.x -= (pointer.clientX - pointer.lastX) * (currentViewBox.width / rect.width);
+          currentViewBox.y -= (pointer.clientY - pointer.lastY) * (currentViewBox.height / rect.height);
+          clampViewBox(); applyViewBox();
+          pointer.lastX = pointer.clientX; pointer.lastY = pointer.clientY;
+        }
+      });
+
+      function finishPointer(event) {
+        const pointer = activePointers.get(event.pointerId); if (pointer) markPointerMoved(pointer);
+        activePointers.delete(event.pointerId);
+        if (panPointerId === event.pointerId) panPointerId = null;
+        if (activePointers.size < 2) pinchDistance = null;
+        if (activePointers.size === 0) { multiTouchGesture = false; viewport.classList.remove('panning'); }
+      }
+      svg.addEventListener('pointerup', finishPointer);
+      svg.addEventListener('pointercancel', finishPointer);
+      svg.addEventListener('pointerleave', (event) => { if (activePointers.has(event.pointerId)) finishPointer(event); });
+      svg.addEventListener('wheel', (event) => { event.preventDefault(); zoomAroundPoint(event.deltaY < 0 ? 0.88 : 1.14, clientToSvg(event.clientX, event.clientY)); }, { passive:false });
+    }
+
+    function closestLengthOnPath(path, target) {
+      const total = path.getTotalLength();
+      const coarse = 120;
+      let best = 0, bestDist = Infinity;
+      for (let i=0; i<=coarse; i++) {
+        const len = total * (i / coarse); const p = path.getPointAtLength(len);
+        const dist = (p.x-target.x)**2 + (p.y-target.y)**2;
+        if (dist < bestDist) { bestDist = dist; best = len; }
+      }
+      let radius = total / coarse;
+      for (let it=0; it<12; it++) {
+        for (const len of [Math.max(0,best-radius), Math.min(total,best+radius)]) {
+          const p = path.getPointAtLength(len); const dist = (p.x-target.x)**2 + (p.y-target.y)**2;
+          if (dist < bestDist) { bestDist = dist; best = len; }
+        }
+        radius /= 2;
+      }
+      return best;
+    }
+
+    function getSegmentIndexAtLength(state, selectedSvgLength) {
+      if (!hasKnownLength(state.definition)) return 0;
+      const lastIndex = state.segmentLengths.length - 1;
+      const remainder = Number((state.definition.meters % 6).toFixed(2));
+      if (remainder > 0 && lastIndex > 0) {
+        const actualRemSvg = state.totalSvgLength * (remainder / state.definition.meters);
+        const touchStart = Math.max(0, state.totalSvgLength - Math.max(MIN_REMAINDER_TOUCH_LENGTH, actualRemSvg));
+        if (selectedSvgLength >= touchStart) return lastIndex;
+      }
+      const selectedMeters = state.definition.meters * (selectedSvgLength / state.totalSvgLength);
+      let acc = 0;
+      for (let i=0; i<state.segmentLengths.length; i++) {
+        acc += state.segmentLengths[i];
+        if (selectedMeters < acc || i === state.segmentLengths.length - 1) return i;
+      }
+      return lastIndex;
+    }
+
+    function isSegmentActive(state, index) { return state.activitySegmentCount[index] > 0; }
+    function refreshSegment(state, index) { state.segmentOverlays[index].classList.toggle('active', isSegmentActive(state,index)); }
+    function refreshFullLine(state) { state.fullOverlay.classList.toggle('active', state.segmentOverlays.every((_,i)=>isSegmentActive(state,i))); }
+    function refreshLine(state) { state.segmentOverlays.forEach((_,i)=>refreshSegment(state,i)); refreshFullLine(state); }
+
+    function getManualEndpoints(lineId) {
+      const d = lineDefs.find(line => line.id === lineId);
+      return d ? { start:d.from, end:d.to } : { start:'?', end:'?' };
+    }
+
+    function findManualActivity(lineId, segmentIndex) {
+      return activities.find(a => a.source === 'manual' && Array.isArray(a.appliedSegments) && a.appliedSegments.length === 1 && a.appliedSegments[0].lineId === lineId && a.appliedSegments[0].segmentIndex === segmentIndex);
+    }
+
+    function createManualActivity(lineId, segmentIndex) {
+      const state = lineStates.get(lineId);
+      const rawLength = state.segmentLengths[segmentIndex];
+      const segmentLength = Number.isFinite(Number(rawLength)) ? Number(rawLength) : null;
+      const endpoints = getManualEndpoints(lineId);
+      return {
+        id: (crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`),
+        source: 'manual',
+        startCamera: endpoints.start,
+        endCamera: endpoints.end,
+        length: segmentLength,
+        appliedLength: segmentLength,
+        appliedSegments: [{ lineId, segmentIndex, segmentLength }],
+        date: ''
+      };
+    }
+
+    function toggleManualSegment(lineId, segmentIndex) {
+      const existing = findManualActivity(lineId, segmentIndex);
+      if (existing) activities = activities.filter(a => a.id !== existing.id); else activities.push(createManualActivity(lineId, segmentIndex));
+      saveActivities(); rebuildActivityMarks(); renderActivities();
+    }
+
+    function openAttributes(lineId) {
+      selectedLineId = lineId;
+      const state = lineStates.get(lineId);
+      attrSubtitle.textContent = getLineDisplayName(state.definition);
+      lineLengthInput.value = formatLength(state.definition.meters);
+      diameterInput.value = state.attributes.diameter;
+      attributeFormError.textContent = '';
+      attributeModal.classList.add('open');
+      attributeModal.setAttribute('aria-hidden','false');
+      setTimeout(() => lineLengthInput.focus(), 40);
+    }
+    function closeAttributes() {
+      selectedLineId = null;
+      attributeFormError.textContent = '';
+      attributeModal.classList.remove('open');
+      attributeModal.setAttribute('aria-hidden','true');
+    }
+
+    function todayInputDate() { const now = new Date(); const local = new Date(now.getTime() - now.getTimezoneOffset()*60000); return local.toISOString().slice(0,10); }
+    function normalizeName(v) { return String(v ?? '').trim().toUpperCase(); }
+
+    function getNodeDisplayName(nodeId) {
+      return nodeMap.get(nodeId)?.displayName || nodeId;
+    }
+
+    function getLineDisplayName(definition) {
+      if (!definition) return '';
+      return `${getNodeDisplayName(definition.from)}–${getNodeDisplayName(definition.to)}`;
+    }
+
+    function resolveMainCameraName(value) {
+      const normalized = normalizeName(value);
+      if (!normalized) return null;
+      const match = nodeDefs.find(node =>
+        node.main && (
+          normalizeName(node.id) === normalized ||
+          normalizeName(node.displayName) === normalized
+        )
+      );
+      return match?.id || null;
+    }
+
+    function saveNodeSettings() {
+      const settings = {};
+      nodeDefs.forEach(node => {
+        settings[node.id] = { displayName: node.displayName || node.id };
+      });
+      try { localStorage.setItem(NODE_SETTINGS_KEY, JSON.stringify(settings)); } catch {}
+    }
+
+    function loadFilterSettings() {
+      try {
+        const saved = localStorage.getItem(FILTER_SETTINGS_KEY);
+        const parsed = saved ? JSON.parse(saved) : {};
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveFilterSettings() {
+      try {
+        localStorage.setItem(FILTER_SETTINGS_KEY, JSON.stringify({
+          showPointNames: labelsFilterCheckbox.checked
+        }));
+      } catch {}
+    }
+
+    function applyPointNameFilter() {
+      labelsGroup.style.display = labelsFilterCheckbox.checked ? '' : 'none';
+    }
+
+    function openNodeNameEditor(nodeId) {
+      selectedNodeId = nodeId;
+      const node = nodeMap.get(nodeId);
+      if (!node) return;
+      nodeNameSubtitle.textContent = node.main ? 'Cámara' : 'Sumidero';
+      nodeNameInput.value = node.displayName || node.id;
+      nodeNameError.textContent = '';
+      nodeNameModal.classList.add('open');
+      nodeNameModal.setAttribute('aria-hidden', 'false');
+      setTimeout(() => {
+        nodeNameInput.focus();
+        nodeNameInput.select();
+      }, 40);
+    }
+
+    function closeNodeNameEditor() {
+      selectedNodeId = null;
+      nodeNameError.textContent = '';
+      nodeNameModal.classList.remove('open');
+      nodeNameModal.setAttribute('aria-hidden', 'true');
+    }
+
+    function saveNodeName() {
+      if (!selectedNodeId) return;
+      const newName = nodeNameInput.value.trim();
+      if (!newName) {
+        nodeNameError.textContent = 'El nombre no puede quedar vacío.';
+        return;
+      }
+
+      const duplicated = nodeDefs.some(node =>
+        node.id !== selectedNodeId && normalizeName(node.displayName) === normalizeName(newName)
+      );
+      if (duplicated) {
+        nodeNameError.textContent = 'Ya existe otro punto con ese nombre.';
+        return;
+      }
+
+      const node = nodeMap.get(selectedNodeId);
+      node.displayName = newName;
+      saveNodeSettings();
+      placeLabels();
+      applyPointNameFilter();
+      renderActivities();
+      closeNodeNameEditor();
+    }
+    function loadActivities() { try { const saved = localStorage.getItem(STORAGE_KEY); const parsed = saved ? JSON.parse(saved) : []; return Array.isArray(parsed) ? parsed : []; } catch { return []; } }
+    function saveActivities() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(activities)); } catch {} }
+
+    function findPathBetweenCameras(startCamera, endCamera) {
+      const queue = [{ camera:startCamera, path:[] }]; const visited = new Set([startCamera]);
+      while (queue.length) {
+        const current = queue.shift();
+        if (current.camera === endCamera) return current.path;
+        routeEdges.forEach(edge => {
+          let next = null, forward = true;
+          if (edge.from === current.camera) { next = edge.to; forward = true; }
+          else if (edge.to === current.camera) { next = edge.from; forward = false; }
+          if (!next || visited.has(next)) return;
+          visited.add(next);
+          queue.push({ camera:next, path: current.path.concat({ lineId:edge.lineId, forward }) });
+        });
+      }
+      return null;
+    }
+
+    function getAvailableLength(startCamera, endCamera) {
+      const path = findPathBetweenCameras(startCamera, endCamera);
+      if (!path) {
+        return { ok: false, availableLength: 0, message: 'No existe una ruta entre esas dos cámaras en la red actual.' };
+      }
+
+      let availableLength = 0;
+      for (const step of path) {
+        const state = lineStates.get(step.lineId);
+        if (!state || !hasKnownLength(state.definition)) {
+          return { ok: false, availableLength: 0, message: `Falta definir la longitud de ${state?.definition?.name || step.lineId}.` };
+        }
+        state.segmentLengths.forEach((segmentLength, segmentIndex) => {
+          if (state.activitySegmentCount[segmentIndex] === 0 && Number.isFinite(Number(segmentLength))) {
+            availableLength += Number(segmentLength);
+          }
+        });
+      }
+      return { ok: true, path, availableLength: Number(availableLength.toFixed(2)) };
+    }
+
+    function computeAppliedSegments(startCamera, endCamera, requestedLength) {
+      const path = findPathBetweenCameras(startCamera, endCamera);
+      if (!path) return { ok:false, message:'No existe una ruta entre esas dos cámaras en la red actual.' };
+      let remaining = requestedLength;
+      let appliedLength = 0;
+      const appliedSegments = [];
+      outerLoop:
+      for (const step of path) {
+        const state = lineStates.get(step.lineId);
+        if (!state || !hasKnownLength(state.definition)) {
+          return { ok:false, message:`Falta definir la longitud de ${state?.definition?.name || step.lineId}.` };
+        }
+        const indexes = step.forward ? state.segmentLengths.map((_,i)=>i) : state.segmentLengths.map((_,i)=>i).reverse();
+        for (const segmentIndex of indexes) {
+          const segmentLength = Number(state.segmentLengths[segmentIndex]);
+          if (!Number.isFinite(segmentLength)) continue;
+          if (state.activitySegmentCount[segmentIndex] > 0) continue;
+          if (remaining + 1e-9 >= segmentLength) {
+            appliedSegments.push({ lineId:step.lineId, segmentIndex, segmentLength });
+            remaining -= segmentLength;
+            appliedLength += segmentLength;
+          } else {
+            break outerLoop;
+          }
+        }
+      }
+      return { ok:true, path, appliedSegments, appliedLength:Number(appliedLength.toFixed(2)) };
+    }
+
+    function clearAllVisualMarks() { lineStates.forEach(state => { state.activitySegmentCount = state.activitySegmentCount.map(() => 0); refreshLine(state); }); }
+    function applyActivityVisualMarks(activity) {
+      if (!Array.isArray(activity.appliedSegments)) return;
+      const touched = new Set();
+      activity.appliedSegments.forEach(info => {
+        const state = lineStates.get(info.lineId); if (!state) return; const idx = info.segmentIndex;
+        if (idx < 0 || idx >= state.activitySegmentCount.length) return;
+        state.activitySegmentCount[idx] += 1; touched.add(info.lineId);
+      });
+      touched.forEach(id => refreshLine(lineStates.get(id)));
+    }
+
+    function rebuildActivityMarks() {
+      clearAllVisualMarks();
+      activities.forEach(activity => {
+        if (activity.source === 'manual') {
+          if (!Array.isArray(activity.appliedSegments)) activity.appliedSegments = [];
+          const known = activity.appliedSegments
+            .map(segment => Number(segment.segmentLength))
+            .filter(Number.isFinite);
+          activity.appliedLength = known.length ? Number(known.reduce((sum, value) => sum + value, 0).toFixed(2)) : null;
+          applyActivityVisualMarks(activity);
+          return;
+        }
+        if (activity.source === 'manualNode') return;
+        const result = computeAppliedSegments(activity.startCamera, activity.endCamera, activity.length);
+        if (result.ok) {
+          activity.appliedSegments = result.appliedSegments;
+          activity.appliedLength = result.appliedLength;
+          applyActivityVisualMarks(activity);
+        } else {
+          activity.appliedSegments = [];
+          activity.appliedLength = 0;
+        }
+      });
+      saveActivities();
+      checkVictory();
+    }
+
+    function renderActivities() {
+      activitiesBody.innerHTML = '';
+      const has = activities.length > 0;
+      activitiesEmpty.style.display = has ? 'none' : 'block';
+      activitiesWrapper.style.display = has ? 'block' : 'none';
+      activities.forEach(activity => {
+        const row = document.createElement('tr');
+        const dir = document.createElement('td');
+        dir.className = 'activity-dir';
+        dir.textContent = `${getNodeDisplayName(activity.startCamera)} → ${getNodeDisplayName(activity.endCamera)}`;
+        const len = document.createElement('td');
+        const shownLength = activity.appliedLength ?? activity.length;
+        len.textContent = shownLength !== null && shownLength !== undefined && Number.isFinite(Number(shownLength)) ? `${formatLength(shownLength)} m` : '—';
+        const dateCell = document.createElement('td');
+        const dateInput = document.createElement('input');
+        dateInput.type = 'date';
+        dateInput.className = 'date-input';
+        dateInput.value = activity.date || '';
+        dateInput.addEventListener('change', () => { activity.date = dateInput.value; saveActivities(); });
+        dateCell.appendChild(dateInput);
+        const actions = document.createElement('td');
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'delete-btn';
+        del.textContent = '×';
+        del.title = 'Eliminar actividad';
+        del.addEventListener('click', () => {
+          activities = activities.filter(item => item.id !== activity.id);
+          saveActivities();
+          rebuildActivityMarks();
+          refreshNodeStates();
+          renderActivities();
+        });
+        actions.appendChild(del);
+        row.append(dir, len, dateCell, actions);
+        activitiesBody.appendChild(row);
+      });
+    }
+
+    function openActivityModal() { activityForm.reset(); activityFormError.textContent=''; activityDateInput.value = todayInputDate(); activityModal.classList.add('open'); activityModal.setAttribute('aria-hidden','false'); setTimeout(() => startCameraInput.focus(), 40); }
+    function closeActivityModal() { activityModal.classList.remove('open'); activityModal.setAttribute('aria-hidden','true'); activityFormError.textContent=''; }
+
+    function registerActivity(event) {
+      event.preventDefault();
+      const startText = normalizeName(startCameraInput.value);
+      const endText = normalizeName(endCameraInput.value);
+      const startCamera = resolveMainCameraName(startCameraInput.value);
+      const endCamera = resolveMainCameraName(endCameraInput.value);
+      const lengthValue = Number(activityLengthInput.value);
+      const date = activityDateInput.value;
+      if (!startText || !endText) { activityFormError.textContent = 'Debes escribir la cámara de inicio y la cámara de fin.'; return; }
+      if (!startCamera || !endCamera) { activityFormError.textContent = `Por ahora las cámaras válidas son: ${validCameras.map(getNodeDisplayName).join(', ')}.`; return; }
+      if (startCamera === endCamera) { activityFormError.textContent = 'La cámara de inicio y la cámara de fin no pueden ser la misma.'; return; }
+      if (!Number.isFinite(lengthValue) || lengthValue <= 0) { activityFormError.textContent = 'La longitud debe ser un número mayor que cero.'; return; }
+      if (!date) { activityFormError.textContent = 'Debes seleccionar una fecha.'; return; }
+
+      const capacity = getAvailableLength(startCamera, endCamera);
+
+      if (!capacity.ok) {
+        activityFormError.textContent = capacity.message;
+        return;
+      }
+
+      if (lengthValue > capacity.availableLength + 1e-9) {
+        activityFormError.textContent =
+          `Solo hay espacio para ${formatLength(capacity.availableLength)} m entre ${getNodeDisplayName(startCamera)} y ${getNodeDisplayName(endCamera)}.`;
+        return;
+      }
+
+      if (capacity.availableLength <= 0) {
+        activityFormError.textContent =
+          `Solo hay espacio para 0 m entre ${getNodeDisplayName(startCamera)} y ${getNodeDisplayName(endCamera)}. La línea ya está completa.`;
+        return;
+      }
+
+      const result = computeAppliedSegments(startCamera, endCamera, lengthValue);
+      if (!result.ok) { activityFormError.textContent = result.message; return; }
+      activities.push({ id: (crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`), source:'registered', startCamera, endCamera, length:Number(lengthValue.toFixed(2)), appliedLength:result.appliedLength, appliedSegments:result.appliedSegments, date });
+      saveActivities(); rebuildActivityMarks(); renderActivities(); closeActivityModal();
+    }
+
+    function saveLineSettings() {
+      const settings = {};
+      lineDefs.forEach(def => {
+        const state = lineStates.get(def.id);
+        settings[def.id] = {
+          meters: hasKnownLength(def) ? Number(def.meters) : null,
+          diameter: state?.attributes?.diameter || ''
+        };
+      });
+      try { localStorage.setItem(LINE_SETTINGS_KEY, JSON.stringify(settings)); } catch {}
+    }
+
+    function lineHasActivities(lineId) {
+      return activities.some(activity =>
+        Array.isArray(activity.appliedSegments) &&
+        activity.appliedSegments.some(segment => segment.lineId === lineId)
+      );
+    }
+
+    function buildLine(def) {
+      const branch = def.kind === 'branch';
+      const base = E('path', { class: `base-line${branch ? ' branch' : ''}`, d:def.d });
+      baseLinesGroup.appendChild(base);
+      const measure = E('path', { class:'measure-path', d:def.d, fill:'none', stroke:'none' });
+      svg.appendChild(measure);
+      const total = measure.getTotalLength();
+      const knownLength = hasKnownLength(def);
+      const segmentLengths = knownLength ? lengths(def.meters) : [null];
+      const fullOverlay = E('path', { class: `full-overlay${branch ? ' branch' : ''}`, d:def.d });
+      fullLineOverlaysGroup.appendChild(fullOverlay);
+      const saved = savedLineSettings[def.id] || {};
+      const state = {
+        definition:def,
+        measurePath:measure,
+        totalSvgLength:total,
+        segmentLengths,
+        segmentOverlays:[],
+        activitySegmentCount:segmentLengths.map(()=>0),
+        fullOverlay,
+        guideGroup:null,
+        distanceGroup:null,
+        attributes:{ diameter: typeof saved.diameter === 'string' ? saved.diameter : '' }
+      };
+
+      if (knownLength) {
+        let acc = 0;
+        segmentLengths.forEach(segmentMeters => {
+          const start = total * (acc / def.meters);
+          const end = total * ((acc + segmentMeters) / def.meters);
+          const overlay = E('path', { class: `segment-overlay${branch ? ' branch' : ''}`, d: poly(measure, start, end) });
+          state.segmentOverlays.push(overlay);
+          segmentOverlaysGroup.appendChild(overlay);
+          acc += segmentMeters;
+        });
+      } else {
+        const overlay = E('path', { class: `segment-overlay${branch ? ' branch' : ''}`, d:def.d });
+        state.segmentOverlays.push(overlay);
+        segmentOverlaysGroup.appendChild(overlay);
+      }
+
+      const hit = E('path', { class:'hit', d:def.d });
+      lineHitboxesGroup.appendChild(hit);
+      state.guideGroup = addSegmentGuides(measure, def);
+      state.distanceGroup = addDistanceLabel(measure, def);
+      lineStates.set(def.id, state);
+      hit.addEventListener('pointerup', (event) => {
+        event.preventDefault();
+        if (shouldSuppressTap(event)) return;
+        const point = clientToSvg(event.clientX, event.clientY);
+        const index = getSegmentIndexAtLength(state, closestLengthOnPath(measure, point));
+        toggleManualSegment(def.id, index);
+      });
+    }
+
+    function buildNodes() {
+      nodeDefs.forEach(n => {
+        if (n.main) {
+          const ring = E('circle', {
+            class: 'camera-ring',
+            cx: n.x,
+            cy: n.y,
+            r: n.radius + 1.05
+          });
+          nodesGroup.appendChild(ring);
+        }
+
+        const circle = E('circle', { class:`node${n.main ? ' main' : ''}`, cx:n.x, cy:n.y, r:n.radius, 'data-node-id':n.id, 'data-active':'false' });
+        circle.addEventListener('pointerup', (event) => { if (shouldSuppressTap(event)) return; toggleNode(n.id); });
+        nodesGroup.appendChild(circle);
+      });
+      placeLabels();
+    }
+
+    function placeLabels() {
+      labelsGroup.innerHTML = '';
+      nodeDefs.forEach(n => {
+        if (n.showLabel === false) return;
+        let x = n.x, y = n.y;
+        const cls = n.main ? 'main' : 'terminal';
+        if (n.main) {
+          const candidates = [[42,-26],[44,22],[-42,-26],[-44,22],[0,-36],[0,36]];
+          let best = candidates[0], score = 1e9;
+          for (const [dx,dy] of candidates) {
+            const bx = x + dx, by = y + dy;
+            let sc = 0;
+            nodeDefs.forEach(m => { if (m.id !== n.id && Math.hypot(bx - m.x, by - m.y) < 28) sc += 100; });
+            lineStates.forEach(st => { const t = st.measurePath.getTotalLength(); for (let l=0; l<t; l+=10) { const p = st.measurePath.getPointAtLength(l); if (Math.hypot(bx - p.x, by - p.y) < 18) sc += 6; } });
+            if (sc < score) { score = sc; best = [dx,dy]; }
+          }
+          x += best[0]; y += best[1];
+        } else {
+          const p = nodeMap.get(n.parent); const dx = x - p.x, dy = y - p.y; const len = Math.hypot(dx,dy) || 1;
+          x += dx / len * 24; y += dy / len * 16;
+        }
+        const text = E('text', {
+          class:`node-label ${cls}`,
+          x,
+          y,
+          'data-node-id': n.id,
+          role: 'button',
+          'aria-label': `Editar nombre de ${n.displayName || n.id}`
+        });
+        text.textContent = n.displayName || n.id;
+
+        let labelTapTimer = null;
+        let lastLabelTap = 0;
+        text.addEventListener('pointerup', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (shouldSuppressTap(event)) return;
+          const now = Date.now();
+          if (now - lastLabelTap <= DOUBLE_TAP_DELAY) {
+            if (labelTapTimer) clearTimeout(labelTapTimer);
+            labelTapTimer = null;
+            lastLabelTap = 0;
+            openNodeNameEditor(n.id);
+            return;
+          }
+          lastLabelTap = now;
+          labelTapTimer = setTimeout(() => { labelTapTimer = null; }, DOUBLE_TAP_DELAY);
+        });
+        text.addEventListener('dblclick', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          openNodeNameEditor(n.id);
+        });
+
+        labelsGroup.appendChild(text);
+      });
+    }
+
+    function toggleNode(id) {
+      const existing = activities.find(a => a.source === 'manualNode' && a.nodeId === id);
+      if (existing) activities = activities.filter(a => a.id !== existing.id);
+      else activities.push({ id:(crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`), source:'manualNode', nodeId:id, startCamera:id, endCamera:id, length:0, appliedLength:0, appliedSegments:[], date:'' });
+      refreshNodeStates(); saveActivities(); renderActivities(); checkVictory();
+    }
+
+    function refreshNodeStates() {
+      const activeIds = new Set(activities.filter(a => a.source === 'manualNode').map(a => a.nodeId));
+      document.querySelectorAll('.node').forEach(node => { const active = activeIds.has(node.dataset.nodeId); node.dataset.active = active ? 'true' : 'false'; node.classList.toggle('active', active); });
+    }
+
+    function checkVictory() {
+      const allNodesActive = [...document.querySelectorAll('.node')].every(node => node.dataset.active === 'true');
+      const allSegmentsActive = [...lineStates.values()].every(state => state.segmentOverlays.every((_,i) => isSegmentActive(state,i)));
+      status.textContent = allNodesActive && allSegmentsActive ? '¡Red completada!' : '';
+    }
+
+    buildNodes();
+    lineDefs.forEach(buildLine);
+    placeLabels();
+
+    const savedFilterSettings = loadFilterSettings();
+    labelsFilterCheckbox.checked = savedFilterSettings.showPointNames !== false;
+    applyPointNameFilter();
+    labelsFilterCheckbox.addEventListener('change', () => {
+      applyPointNameFilter();
+      saveFilterSettings();
+    });
+
+    setupZoomPan();
+    applyViewBox();
+    activities = loadActivities().map(a => ({ source:'registered', date:'', ...a }));
+    rebuildActivityMarks();
+    refreshNodeStates();
+    renderActivities();
+
+    resetButton.addEventListener('click', () => {
+      activities = [];
+      saveActivities();
+      rebuildActivityMarks();
+      refreshNodeStates();
+      renderActivities();
+      checkVictory();
+    });
+
+    saveAttrButton.addEventListener('click', () => {
+      if (selectedLineId === null) return;
+      const state = lineStates.get(selectedLineId);
+      const newLength = parseLength(lineLengthInput.value);
+      if (!Number.isFinite(newLength) || newLength <= 0) {
+        attributeFormError.textContent = 'La longitud debe ser un número mayor que cero.';
+        return;
+      }
+
+      const lengthChanged = Math.abs(newLength - Number(state.definition.meters)) > 0.000001;
+      if (lengthChanged && lineHasActivities(selectedLineId)) {
+        attributeFormError.textContent = 'Para cambiar esta longitud, elimina primero las actividades registradas en esta línea.';
+        return;
+      }
+
+      state.definition.meters = Number(newLength.toFixed(2));
+      state.definition.hasDistance = true;
+      state.attributes.diameter = diameterInput.value.trim();
+      saveLineSettings();
+
+      if (lengthChanged) {
+        window.location.reload();
+      } else {
+        closeAttributes();
+      }
+    });
+    cancelAttrButton.addEventListener('click', closeAttributes);
+    saveNodeNameButton.addEventListener('click', saveNodeName);
+    cancelNodeNameButton.addEventListener('click', closeNodeNameEditor);
+    nodeNameInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        saveNodeName();
+      }
+    });
+    openActivityButton.addEventListener('click', openActivityModal);
+    cancelActivityButton.addEventListener('click', closeActivityModal);
+    activityForm.addEventListener('submit', registerActivity);
+    attributeModal.addEventListener('pointerdown', (event) => { if (event.target === attributeModal) closeAttributes(); });
+    nodeNameModal.addEventListener('pointerdown', (event) => { if (event.target === nodeNameModal) closeNodeNameEditor(); });
+    activityModal.addEventListener('pointerdown', (event) => { if (event.target === activityModal) closeActivityModal(); });
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      if (attributeModal.classList.contains('open')) closeAttributes();
+      if (nodeNameModal.classList.contains('open')) closeNodeNameEditor();
+      if (activityModal.classList.contains('open')) closeActivityModal();
+    });
+  </script>
+
+<style>
+  .rock-zone-btn { background: #6b7280; }
+  .rock-panel { margin-top: 14px; }
+  .rock-empty { margin: 0; padding: 16px 10px; color: #6b7280; text-align: center; font-size: 14px; }
+  .rock-zones-table th:nth-child(1), .rock-zones-table td:nth-child(1) { width: 78%; }
+  .rock-zones-table th:nth-child(2), .rock-zones-table td:nth-child(2) { width: 22%; text-align: center; }
+  .rock-zone-chip { display: inline-block; padding: 3px 8px; border-radius: 999px; background: #f3f4f6; color: #4b5563; font-size: 11px; font-weight: 700; }
+</style>
+<script>
+(function() {
+  const ROCK_ZONES_KEY = 'redVerde_autocad_rock_zones_v1';
+
+  const actionsBox = document.querySelector('.actions');
+  const rockButton = document.createElement('button');
+  rockButton.id = 'openRockZoneButton';
+  rockButton.type = 'button';
+  rockButton.className = 'rock-zone-btn';
+  rockButton.textContent = 'Registrar zona rocosa';
+  actionsBox.appendChild(rockButton);
+
+  const filtersStack = document.querySelector('.model-filter-stack');
+  const filterLabel = document.createElement('label');
+  filterLabel.className = 'filter-row';
+  filterLabel.setAttribute('for', 'rockZonesFilterCheckbox');
+  filterLabel.innerHTML = '<input id="rockZonesFilterCheckbox" type="checkbox" checked /><span>Zona rocosa</span>';
+  filtersStack.appendChild(filterLabel);
+  const filtersObject = document.getElementById('modelFiltersObject');
+  if (filtersObject) filtersObject.setAttribute('height', '154');
+
+  const activitiesPanel = document.querySelector('.panel');
+  const rockSection = document.createElement('section');
+  rockSection.className = 'panel rock-panel';
+  rockSection.setAttribute('aria-live', 'polite');
+  rockSection.innerHTML = `
+    <h2>Zonas rocosas registradas</h2>
+    <p id="rockZonesEmpty" class="rock-empty">Todavía no hay zonas rocosas.</p>
+    <div id="rockZonesWrapper" class="table-wrap" style="display:none;">
+      <table class="activities rock-zones-table">
+        <thead><tr><th>Tramo</th><th></th></tr></thead>
+        <tbody id="rockZonesBody"></tbody>
+      </table>
+    </div>
+  `;
+  activitiesPanel.parentNode.appendChild(rockSection);
+
+  const rockModal = document.createElement('div');
+  rockModal.id = 'rockZoneModal';
+  rockModal.className = 'backdrop';
+  rockModal.setAttribute('aria-hidden', 'true');
+  rockModal.innerHTML = `
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="rockZoneTitle">
+      <h2 id="rockZoneTitle">Registrar zona rocosa</h2>
+      <p class="modal-subtitle">Marca un tramo completo entre dos cámaras para señalar suelo duro o roca.</p>
+      <form id="rockZoneForm" novalidate>
+        <div class="form-grid">
+          <div class="form-field"><label for="rockStartCameraInput">Cámara de inicio</label><input id="rockStartCameraInput" type="text" placeholder="Ej.: CA1" autocomplete="off" required /></div>
+          <div class="form-field"><label for="rockEndCameraInput">Cámara de fin</label><input id="rockEndCameraInput" type="text" placeholder="Ej.: CA2" autocomplete="off" required /></div>
+        </div>
+        <div id="rockZoneFormError" class="form-error"></div>
+        <div class="modal-actions"><button id="cancelRockZoneButton" class="secondary" type="button">Cancelar</button><button type="submit">Guardar zona rocosa</button></div>
+      </form>
+    </section>
+  `;
+  document.body.appendChild(rockModal);
+
+  const rockZonesFilterCheckbox = document.getElementById('rockZonesFilterCheckbox');
+  const rockZonesEmpty = document.getElementById('rockZonesEmpty');
+  const rockZonesWrapper = document.getElementById('rockZonesWrapper');
+  const rockZonesBody = document.getElementById('rockZonesBody');
+  const rockZoneForm = document.getElementById('rockZoneForm');
+  const rockStartCameraInput = document.getElementById('rockStartCameraInput');
+  const rockEndCameraInput = document.getElementById('rockEndCameraInput');
+  const rockZoneFormError = document.getElementById('rockZoneFormError');
+  const cancelRockZoneButton = document.getElementById('cancelRockZoneButton');
+
+  let rockZones = loadRockZones();
+  const rockZonesGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  rockZonesGroup.setAttribute('id', 'rockZonesGroup');
+  const labelsGroupEl = document.getElementById('labelsGroup');
+  svg.insertBefore(rockZonesGroup, labelsGroupEl);
+
+  function normalizeNameLocal(v) {
+    return String(v ?? '').trim().toUpperCase();
+  }
+
+  function loadRockZones() {
+    try {
+      const saved = localStorage.getItem(ROCK_ZONES_KEY);
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveRockZones() {
+    try {
+      localStorage.setItem(ROCK_ZONES_KEY, JSON.stringify(rockZones));
+    } catch {}
+  }
+
+  function getDirectMainLineBetweenCameras(startCameraId, endCameraId) {
+    for (const state of lineStates.values()) {
+      const def = state.definition;
+      const startIsMain = nodeMap.get(def.from)?.main;
+      const endIsMain = nodeMap.get(def.to)?.main;
+      if (!startIsMain || !endIsMain) continue;
+      if ((def.from === startCameraId && def.to === endCameraId) || (def.from === endCameraId && def.to === startCameraId)) {
+        return def.id;
+      }
+    }
+    return null;
+  }
+
+  function findRockZoneByLine(lineId) {
+    return rockZones.find(zone => zone.lineId === lineId);
+  }
+
+  function updateCombinedFilterSettings() {
+    try {
+      localStorage.setItem(FILTER_SETTINGS_KEY, JSON.stringify({
+        showPointNames: labelsFilterCheckbox.checked,
+        showRockZones: rockZonesFilterCheckbox.checked
+      }));
+    } catch {}
+  }
+
+  const oldLoadFilterSettings = loadFilterSettings;
+  loadFilterSettings = function() {
+    const base = oldLoadFilterSettings ? oldLoadFilterSettings() : {};
+    return {
+      showPointNames: base.showPointNames !== false,
+      showRockZones: base.showRockZones !== false
+    };
+  };
+
+  const oldSaveFilterSettings = saveFilterSettings;
+  saveFilterSettings = function() {
+    updateCombinedFilterSettings();
+  };
+
+  function applyRockZoneFilter() {
+    rockZonesGroup.style.display = rockZonesFilterCheckbox.checked ? '' : 'none';
+  }
+
+  function linePointAtLength(path, length) {
+    return path.getPointAtLength(Math.max(0, Math.min(path.getTotalLength(), length)));
+  }
+
+  function buildRockZoneVisual(lineId) {
+    const state = lineStates.get(lineId);
+    if (!state) return null;
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.setAttribute('data-line-id', lineId);
+    group.style.pointerEvents = 'none';
+    const path = state.measurePath;
+    const total = path.getTotalLength();
+    const spacing = 28;
+    const start = 18;
+    const end = Math.max(start, total - 18);
+    let toggle = 1;
+    for (let l = start; l <= end; l += spacing) {
+      const p = linePointAtLength(path, l);
+      const before = linePointAtLength(path, l - 2);
+      const after = linePointAtLength(path, l + 2);
+      const dx = after.x - before.x;
+      const dy = after.y - before.y;
+      const mag = Math.hypot(dx, dy) || 1;
+      const nx = (-dy / mag) * 18;
+      const ny = (dx / mag) * 18;
+      const side = toggle > 0 ? 1 : 0.7;
+      const rock = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+      rock.setAttribute('cx', (p.x + nx * side).toFixed(2));
+      rock.setAttribute('cy', (p.y + ny * side).toFixed(2));
+      rock.setAttribute('rx', 8 + (toggle > 0 ? 1.8 : -0.6));
+      rock.setAttribute('ry', 5.6 + (toggle > 0 ? 1.2 : -0.3));
+      rock.setAttribute('fill', 'none');
+      rock.setAttribute('stroke', '#80838a');
+      rock.setAttribute('stroke-width', '2.2');
+      group.appendChild(rock);
+      toggle *= -1;
+    }
+    return group;
+  }
+
+  function renderRockZonesVisuals() {
+    rockZonesGroup.innerHTML = '';
+    rockZones.forEach(zone => {
+      const visual = buildRockZoneVisual(zone.lineId);
+      if (visual) rockZonesGroup.appendChild(visual);
+    });
+    applyRockZoneFilter();
+  }
+
+  function renderRockZonesTable() {
+    rockZonesBody.innerHTML = '';
+    const has = rockZones.length > 0;
+    rockZonesEmpty.style.display = has ? 'none' : 'block';
+    rockZonesWrapper.style.display = has ? 'block' : 'none';
+    rockZones.forEach(zone => {
+      const row = document.createElement('tr');
+      const tramo = document.createElement('td');
+      tramo.innerHTML = `<div class="activity-dir">${getNodeDisplayName(zone.startCamera)} → ${getNodeDisplayName(zone.endCamera)}</div><div class="rock-zone-chip">Zona rocosa</div>`;
+      const action = document.createElement('td');
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'delete-btn';
+      del.textContent = '×';
+      del.title = 'Eliminar zona rocosa';
+      del.addEventListener('click', () => {
+        rockZones = rockZones.filter(item => item.id !== zone.id);
+        saveRockZones();
+        renderRockZonesVisuals();
+        renderRockZonesTable();
+      });
+      action.appendChild(del);
+      row.appendChild(tramo);
+      row.appendChild(action);
+      rockZonesBody.appendChild(row);
+    });
+  }
+
+  function openRockZoneModal() {
+    rockZoneForm.reset();
+    rockZoneFormError.textContent = '';
+    rockModal.classList.add('open');
+    rockModal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => rockStartCameraInput.focus(), 40);
+  }
+
+  function closeRockZoneModal() {
+    rockZoneFormError.textContent = '';
+    rockModal.classList.remove('open');
+    rockModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function saveRockZone(event) {
+    event.preventDefault();
+    const startCamera = resolveMainCameraName(rockStartCameraInput.value);
+    const endCamera = resolveMainCameraName(rockEndCameraInput.value);
+    if (!startCamera || !endCamera) {
+      rockZoneFormError.textContent = 'Debes escribir dos cámaras válidas.';
+      return;
+    }
+    if (startCamera === endCamera) {
+      rockZoneFormError.textContent = 'La cámara de inicio y la cámara de fin no pueden ser la misma.';
+      return;
+    }
+    const lineId = getDirectMainLineBetweenCameras(startCamera, endCamera);
+    if (!lineId) {
+      rockZoneFormError.textContent = 'Por ahora la zona rocosa debe corresponder a un tramo directo entre dos cámaras consecutivas.';
+      return;
+    }
+    const existing = findRockZoneByLine(lineId);
+    if (existing) {
+      rockZoneFormError.textContent = `Ese tramo ya está registrado como zona rocosa.`;
+      return;
+    }
+    rockZones.push({
+      id: (crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`),
+      lineId,
+      startCamera,
+      endCamera,
+      type: 'rock'
+    });
+    saveRockZones();
+    renderRockZonesVisuals();
+    renderRockZonesTable();
+    closeRockZoneModal();
+  }
+
+  // Keep rock table names updated if the user renames nodes.
+  const oldSaveNodeName = saveNodeName;
+  saveNodeName = function() {
+    oldSaveNodeName();
+    renderRockZonesTable();
+  };
+
+  // Ensure reset also clears rock zones.
+  resetButton.addEventListener('click', () => {
+    rockZones = [];
+    saveRockZones();
+    renderRockZonesVisuals();
+    renderRockZonesTable();
+  });
+
+  // Wire events.
+  rockButton.addEventListener('click', openRockZoneModal);
+  cancelRockZoneButton.addEventListener('click', closeRockZoneModal);
+  rockZoneForm.addEventListener('submit', saveRockZone);
+  rockModal.addEventListener('pointerdown', (event) => {
+    if (event.target === rockModal) closeRockZoneModal();
+  });
+  rockZonesFilterCheckbox.addEventListener('change', () => {
+    applyRockZoneFilter();
+    updateCombinedFilterSettings();
+  });
+  labelsFilterCheckbox.removeEventListener?.('change', saveFilterSettings);
+  labelsFilterCheckbox.addEventListener('change', () => {
+    applyPointNameFilter();
+    updateCombinedFilterSettings();
+  });
+
+  // Initialize filter state from storage.
+  const filterState = loadFilterSettings();
+  rockZonesFilterCheckbox.checked = filterState.showRockZones !== false;
+  labelsFilterCheckbox.checked = filterState.showPointNames !== false;
+  applyPointNameFilter();
+  applyRockZoneFilter();
+
+  renderRockZonesVisuals();
+  renderRockZonesTable();
+
+  // Extend Escape handling for the new modal.
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && rockModal.classList.contains('open')) {
+      closeRockZoneModal();
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
