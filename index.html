@@ -8,24 +8,41 @@
 <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
   <style>
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; background: #fafafa; }
     body {
-      margin: 0; min-height: 100vh; font-family: Arial, sans-serif; background: #f3f4f6;
-      display: flex; justify-content: center; align-items: center; padding: 14px; touch-action: manipulation;
+      margin: 0; width: 100%; height: 100%; min-height: 100dvh; overflow: hidden;
+      font-family: Arial, sans-serif; background: #fafafa;
+      display: flex; justify-content: center; align-items: stretch; padding: 0;
+      touch-action: manipulation; overscroll-behavior: none;
     }
     .app {
-      width: min(100%, 1240px); background: #fff; border-radius: 20px; padding: 18px;
-      box-shadow: 0 8px 28px rgba(0,0,0,.12);
+      width: 100%; height: 100dvh; min-height: 0; overflow: hidden; background: #fff;
     }
-    h1 { margin: 0 0 4px; text-align: center; font-size: 27px; }
+    .layout, .network-col, .network-shell { width: 100%; height: 100%; min-height: 0; }
     .layout { display: block; }
     .network-col { min-width: 0; }
-    .network-shell { overflow: hidden; border-radius: 16px; background: #fafafa; border: 1px solid #e5e7eb; }
-    .toolbar { display: flex; justify-content: flex-end; gap: 8px; padding: 9px; border-bottom: 1px solid #e5e7eb; background: #fff; }
-    .zoom-btn { min-width: 42px; min-height: 38px; padding: 7px 11px; border: 1px solid #d1d5db; border-radius: 10px; background: #fff; color: #111; font-size: 19px; line-height: 1; cursor: pointer; }
-    .fit-btn { min-width: 76px; font-size: 14px; }
-    .viewport { position: relative; overflow: hidden; width: 100%; background: #fafafa; touch-action: none; cursor: grab; }
+    .network-shell { overflow: hidden; background: #fafafa; }
+    .model-header {
+      position: absolute; z-index: 6; top: max(8px, env(safe-area-inset-top)); right: 8px; left: 8px;
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      pointer-events: none;
+    }
+    .model-title {
+      margin: 0; padding: 7px 10px; border: 1px solid rgba(209,213,219,.9); border-radius: 10px;
+      background: rgba(255,255,255,.94); box-shadow: 0 3px 12px rgba(0,0,0,.1);
+      font-size: clamp(16px, 4.5vw, 22px); line-height: 1.1; white-space: nowrap;
+    }
+    .toolbar {
+      display: flex; justify-content: flex-end; gap: 5px; padding: 5px;
+      border: 1px solid rgba(209,213,219,.9); border-radius: 11px;
+      background: rgba(255,255,255,.94); box-shadow: 0 3px 12px rgba(0,0,0,.1);
+      pointer-events: auto;
+    }
+    .zoom-btn { min-width: 34px; min-height: 34px; padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: #111; font-size: 18px; line-height: 1; cursor: pointer; }
+    .fit-btn { min-width: 62px; font-size: 12px; }
+    .viewport { position: relative; overflow: hidden; width: 100%; height: 100%; background: #fafafa; touch-action: none; cursor: grab; }
     .viewport.panning { cursor: grabbing; }
-    svg { display: block; width: 100%; height: auto; min-height: 760px; background: #fafafa; user-select: none; touch-action: none; }
+    svg { display: block; width: 100%; height: 100%; min-height: 0; background: #fafafa; user-select: none; touch-action: none; }
     .base-line, .segment-overlay, .full-overlay, .hit { fill: none; stroke-linecap: round; stroke-linejoin: round; }
     .base-line { stroke: #111; stroke-width: 5.2; pointer-events: none; }
     .base-line.branch { stroke-width: 3.4; }
@@ -62,7 +79,10 @@
     .short-segment-selector.active .short-segment-leader, .short-segment-selector.active .short-segment-pill { stroke: #16a34a; }
     .short-segment-selector.active .short-segment-pill { fill: #dcfce7; }
     .short-segment-selector.active .short-segment-text { fill: #166534; }
-    #status { min-height: 28px; margin-top: 12px; color: #16a34a; font-weight: 700; text-align: center; }
+    #status {
+      position: absolute; z-index: 6; right: 12px; bottom: max(10px, env(safe-area-inset-bottom)); left: 12px;
+      min-height: 0; color: #16a34a; font-weight: 700; text-align: center; pointer-events: none;
+    }
     .filter-panel { padding: 12px; border: 1px solid #d1d5db; border-radius: 12px; background: rgba(255,255,255,.96); }
     .filter-panel h2 { margin: 0 0 10px; font-size: 17px; }
     .filter-row { display: flex; align-items: center; gap: 9px; color: #1f2937; font-size: 14px; font-weight: 700; cursor: pointer; }
@@ -144,22 +164,29 @@
     .form-error { min-height: 20px; margin: -4px 0 12px; color: #b91c1c; font-size: 14px; font-weight: 700; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
     .secondary { background: #e5e7eb; color: #111; }
-    @media (max-width: 920px) { .app { width: min(100%, 720px); } }
+    @media (max-width: 420px) {
+      .model-header { top: max(5px, env(safe-area-inset-top)); right: 5px; left: 5px; gap: 5px; }
+      .model-title { padding: 7px 8px; font-size: 16px; }
+      .toolbar { gap: 3px; padding: 4px; }
+      .zoom-btn { min-width: 32px; min-height: 32px; padding: 4px 6px; }
+      .fit-btn { min-width: 57px; font-size: 11px; }
+    }
   </style>
 </head>
 <body>
   <main class="app">
-    <h1>Visualización de red</h1>
-
     <div class="layout">
       <section class="network-col">
         <div class="network-shell">
-          <div class="toolbar" aria-label="Controles del diagrama">
-            <button id="zoomOutButton" class="zoom-btn" type="button">−</button>
-            <button id="fitViewButton" class="zoom-btn fit-btn" type="button">Centrar</button>
-            <button id="zoomInButton" class="zoom-btn" type="button">+</button>
-          </div>
           <div id="networkViewport" class="viewport">
+            <div class="model-header">
+              <h1 class="model-title">Visualización de red</h1>
+              <div class="toolbar" aria-label="Controles del diagrama">
+                <button id="zoomOutButton" class="zoom-btn" type="button" aria-label="Alejar">−</button>
+                <button id="fitViewButton" class="zoom-btn fit-btn" type="button">Centrar</button>
+                <button id="zoomInButton" class="zoom-btn" type="button" aria-label="Acercar">+</button>
+              </div>
+            </div>
             <svg id="networkSvg" viewBox="-175 34.53 1157.19 1370.95" preserveAspectRatio="xMidYMid meet" aria-label="Red esquemática desde AutoCAD">
               <g id="baseLinesGroup"></g>
               <g id="segmentGuidesGroup"></g>
@@ -235,9 +262,9 @@
                 </div>
               </foreignObject>
             </svg>
+            <div id="status"></div>
           </div>
         </div>
-        <div id="status"></div>
       </section>
 
     </div>
@@ -721,6 +748,10 @@
       zoomInButton.addEventListener('click', () => zoomAroundPoint(0.8, { x: currentViewBox.x + currentViewBox.width/2, y: currentViewBox.y + currentViewBox.height/2 }));
       zoomOutButton.addEventListener('click', () => zoomAroundPoint(1.25, { x: currentViewBox.x + currentViewBox.width/2, y: currentViewBox.y + currentViewBox.height/2 }));
       fitViewButton.addEventListener('click', resetView);
+      svg.addEventListener('dblclick', event => event.preventDefault(), { passive:false });
+      ['gesturestart', 'gesturechange', 'gestureend'].forEach(type => {
+        viewport.addEventListener(type, event => event.preventDefault(), { passive:false });
+      });
 
       svg.addEventListener('pointerdown', (event) => {
         if (isInteractiveTarget(event.target)) lastEmptyTapTime = 0;
@@ -753,9 +784,10 @@
         }
         if (panPointerId === event.pointerId && pointer.canPan) {
           event.preventDefault();
-          const rect = svg.getBoundingClientRect();
-          currentViewBox.x -= (pointer.clientX - pointer.lastX) * (currentViewBox.width / rect.width);
-          currentViewBox.y -= (pointer.clientY - pointer.lastY) * (currentViewBox.height / rect.height);
+          const previousPoint = clientToSvg(pointer.lastX, pointer.lastY);
+          const currentPoint = clientToSvg(pointer.clientX, pointer.clientY);
+          currentViewBox.x -= currentPoint.x - previousPoint.x;
+          currentViewBox.y -= currentPoint.y - previousPoint.y;
           clampViewBox(); applyViewBox();
           pointer.lastX = pointer.clientX; pointer.lastY = pointer.clientY;
         }
@@ -1610,7 +1642,8 @@
     });
 
     setupZoomPan();
-    applyViewBox();
+    resetView();
+    window.addEventListener('pageshow', resetView);
     activities = loadActivities().map(a => ({ source:'registered', date:'', ...a }));
     rebuildActivityMarks();
     refreshNodeStates();
