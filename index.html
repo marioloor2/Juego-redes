@@ -54,6 +54,16 @@
     .segment-guides { opacity: 0; pointer-events: none; transition: opacity .15s ease; }
     .segment-guides.visible { opacity: 1; }
     .segment-guide { stroke: #9ca3af; stroke-width: 1.6; }
+    .short-segment-selectors { opacity: 0; pointer-events: none; transition: opacity .15s ease; }
+    .short-segment-selectors.visible { opacity: 1; pointer-events: auto; }
+    .short-segment-selector { cursor: pointer; outline: none; }
+    .short-segment-hit { fill: transparent; pointer-events: all; }
+    .short-segment-leader { stroke: #6b7280; stroke-width: 1.4; pointer-events: none; }
+    .short-segment-pill { fill: #fff; stroke: #6b7280; stroke-width: 1.4; pointer-events: none; }
+    .short-segment-text { fill: #374151; font-size: 9.5px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+    .short-segment-selector.active .short-segment-leader, .short-segment-selector.active .short-segment-pill { stroke: #16a34a; }
+    .short-segment-selector.active .short-segment-pill { fill: #dcfce7; }
+    .short-segment-selector.active .short-segment-text { fill: #166534; }
     #status { min-height: 28px; margin-top: 12px; color: #16a34a; font-weight: 700; text-align: center; }
     .filter-panel { padding: 12px; border: 1px solid #d1d5db; border-radius: 12px; background: rgba(255,255,255,.96); }
     .filter-panel h2 { margin: 0 0 10px; font-size: 17px; }
@@ -63,6 +73,12 @@
     .model-filter-ui { width: 100%; height: 100%; font-family: Arial, sans-serif; pointer-events: auto; }
     .model-filter-panel { margin: 0; width: 100%; box-shadow: 0 5px 16px rgba(0,0,0,.12); }
     .model-filter-stack { display: grid; gap: 8px; }
+    .progress-panel { margin-top: 8px; box-shadow: 0 5px 16px rgba(0,0,0,.12); }
+    .progress-list { display: grid; gap: 8px; }
+    .progress-row { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: baseline; color: #1f2937; font-size: 12px; }
+    .progress-label, .progress-value { font-weight: 700; }
+    .progress-value { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .progress-warning { margin: 8px 0 0; color: #92400e; font-size: 10.5px; line-height: 1.35; }
     .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
     .actions button { flex: 1 1 130px; }
     button { border: 0; border-radius: 12px; padding: 12px 18px; background: #111; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
@@ -114,7 +130,7 @@
             <button id="zoomInButton" class="zoom-btn" type="button">+</button>
           </div>
           <div id="networkViewport" class="viewport">
-            <svg id="networkSvg" viewBox="-110 34.53 1092.19 1370.95" preserveAspectRatio="xMidYMid meet" aria-label="Red esquemática desde AutoCAD">
+            <svg id="networkSvg" viewBox="-175 34.53 1157.19 1370.95" preserveAspectRatio="xMidYMid meet" aria-label="Red esquemática desde AutoCAD">
               <g id="baseLinesGroup"></g>
               <g id="segmentGuidesGroup"></g>
               <g id="segmentOverlaysGroup"></g>
@@ -123,14 +139,15 @@
               <g id="distanceLabelsGroup"></g>
               <g id="nodesGroup"></g>
               <g id="labelsGroup"></g>
+              <g id="shortSegmentSelectorsGroup" class="short-segment-selectors"></g>
 
               <foreignObject
                 id="modelFiltersObject"
                 class="model-filter-object"
-                x="-92"
+                x="-153.79"
                 y="44"
-                width="205"
-                height="118"
+                width="240"
+                height="225"
               >
                 <div xmlns="http://www.w3.org/1999/xhtml" class="model-filter-ui">
                   <section class="filter-panel model-filter-panel" aria-label="Filtros de visualización">
@@ -141,6 +158,20 @@
                         <span>Cámaras / sumideros</span>
                       </label>
                     </div>
+                  </section>
+                  <section class="filter-panel progress-panel" aria-labelledby="progressTitle" aria-live="polite">
+                    <h2 id="progressTitle">Porcentaje de avance</h2>
+                    <div class="progress-list">
+                      <div class="progress-row">
+                        <span class="progress-label">Colectores:</span>
+                        <span id="collectorProgressText" class="progress-value">0 m / 0 m; 0 %</span>
+                      </div>
+                      <div class="progress-row">
+                        <span class="progress-label">Tirantes:</span>
+                        <span id="branchProgressText" class="progress-value">0 m / 0 m; 0 %</span>
+                      </div>
+                    </div>
+                    <p id="branchProgressWarning" class="progress-warning" hidden></p>
                   </section>
                 </div>
               </foreignObject>
@@ -298,6 +329,8 @@
     const distanceLabelsGroup = document.getElementById("distanceLabelsGroup");
     const nodesGroup = document.getElementById("nodesGroup");
     const labelsGroup = document.getElementById("labelsGroup");
+    const shortSegmentSelectorsGroup = document.getElementById("shortSegmentSelectorsGroup");
+    const modelFiltersObject = document.getElementById("modelFiltersObject");
     const status = document.getElementById("status");
     const resetButton = document.getElementById("resetButton");
     const labelsFilterCheckbox = document.getElementById("labelsFilterCheckbox");
@@ -329,6 +362,9 @@
     const activitiesEmpty = document.getElementById("activitiesEmpty");
     const activitiesWrapper = document.getElementById("activitiesWrapper");
     const activitiesBody = document.getElementById("activitiesBody");
+    const collectorProgressText = document.getElementById("collectorProgressText");
+    const branchProgressText = document.getElementById("branchProgressText");
+    const branchProgressWarning = document.getElementById("branchProgressWarning");
 
     const nodeMap = new Map(nodeDefs.map(n => [n.id, n]));
     const validCameras = nodeDefs.filter(n => n.main).map(n => n.id);
@@ -337,8 +373,13 @@
     let selectedLineId = null;
     let selectedNodeId = null;
 
-    const INITIAL_VIEW_BOX = { x: -110, y: 34.53, width: 1092.19, height: 1370.95 };
-    const MIN_VIEW_BOX_WIDTH = INITIAL_VIEW_BOX.width * 0.192;
+    const DIAGRAM_VIEW_BOX_WIDTH = 1092.19;
+    const INITIAL_VIEW_BOX = { x: -175, y: 34.53, width: 1157.19, height: 1370.95 };
+    const MODEL_PANELS_DRAWING_GAP = 80;
+    const leftmostNodeX = Math.min(...nodeDefs.map(node => node.x));
+    const modelPanelsWidth = Number(modelFiltersObject.getAttribute('width'));
+    modelFiltersObject.setAttribute('x', (leftmostNodeX - MODEL_PANELS_DRAWING_GAP - modelPanelsWidth).toFixed(2));
+    const MIN_VIEW_BOX_WIDTH = DIAGRAM_VIEW_BOX_WIDTH * 0.192;
     const MAX_VIEW_BOX_WIDTH = INITIAL_VIEW_BOX.width * 1.7;
     const activePointers = new Map();
     let currentViewBox = { ...INITIAL_VIEW_BOX };
@@ -364,9 +405,8 @@
       return result;
     }
 
-    function poly(measure, startLen, endLen) {
+    function poly(measure, startLen, endLen, overlap=0.8) {
       const total = measure.getTotalLength();
-      const overlap = 0.8;
       const safeStart = Math.max(0, startLen - overlap);
       const safeEnd = Math.min(total, endLen + overlap);
       const visible = Math.max(safeEnd - safeStart, 0.001);
@@ -378,6 +418,27 @@
         points.push([p.x, p.y]);
       }
       return points.map(([x,y], i) => `${i===0?'M':'L'}${x} ${y}`).join(' ');
+    }
+
+    function visibleLinePath(def) {
+      const fullMeasure = E('path', { d:def.d, fill:'none', stroke:'none' });
+      svg.appendChild(fullMeasure);
+      const total = fullMeasure.getTotalLength();
+      if (total <= 0.001) {
+        fullMeasure.remove();
+        return def.d;
+      }
+
+      const startRadius = Math.max(0, Number(nodeMap.get(def.from)?.radius) || 0);
+      const endRadius = Math.max(0, Number(nodeMap.get(def.to)?.radius) || 0);
+      const maximumTrim = Math.max(0, total - 0.001);
+      const requestedTrim = startRadius + endRadius;
+      const trimScale = requestedTrim > maximumTrim && requestedTrim > 0 ? maximumTrim / requestedTrim : 1;
+      const visibleStart = startRadius * trimScale;
+      const visibleEnd = total - endRadius * trimScale;
+      const visiblePath = poly(fullMeasure, visibleStart, visibleEnd, 0);
+      fullMeasure.remove();
+      return visiblePath;
     }
 
     function addDistanceLabel(measure, def) {
@@ -445,6 +506,89 @@
       return group;
     }
 
+    function setShortSegmentSelectorTransform(group) {
+      const scale = currentViewBox.width / INITIAL_VIEW_BOX.width;
+      group.setAttribute('transform', `translate(${group.dataset.anchorX} ${group.dataset.anchorY}) scale(${scale})`);
+    }
+
+    function updateShortSegmentSelectorScale() {
+      shortSegmentSelectorsGroup.querySelectorAll('.short-segment-selector').forEach(setShortSegmentSelectorTransform);
+    }
+
+    function addShortSegmentSelector(state, segmentIndex, startSvgLength, endSvgLength) {
+      const segmentLength = Number(state.segmentLengths[segmentIndex]);
+      if (!Number.isFinite(segmentLength) || segmentLength >= 4 - 0.000001) return null;
+
+      const selectorPosition = startSvgLength + (endSvgLength - startSvgLength) * 0.15;
+      const point = state.measurePath.getPointAtLength(selectorPosition);
+      const before = state.measurePath.getPointAtLength(Math.max(0, selectorPosition - 2));
+      const after = state.measurePath.getPointAtLength(Math.min(state.totalSvgLength, selectorPosition + 2));
+      const dx = after.x - before.x;
+      const dy = after.y - before.y;
+      const magnitude = Math.hypot(dx, dy) || 1;
+      const nx = -dy / magnitude;
+      const ny = dx / magnitude;
+      const labelX = nx * 46;
+      const labelY = ny * 46;
+      const group = E('g', {
+        class: 'short-segment-selector',
+        'data-line-id': state.definition.id,
+        'data-segment-index': segmentIndex,
+        role: 'button',
+        tabindex: '0',
+        'aria-label': `Marcar tramo corto de ${formatLength(segmentLength)} metros en ${getLineDisplayName(state.definition)}`
+      });
+      group.dataset.anchorX = point.x.toFixed(2);
+      group.dataset.anchorY = point.y.toFixed(2);
+
+      const leader = E('line', {
+        class: 'short-segment-leader',
+        x1: nx * 5,
+        y1: ny * 5,
+        x2: nx * 34,
+        y2: ny * 34
+      });
+      const hit = E('rect', {
+        class: 'short-segment-hit',
+        x: labelX - 38,
+        y: labelY - 22,
+        width: 76,
+        height: 44,
+        rx: 10,
+        ry: 10
+      });
+      const pill = E('rect', {
+        class: 'short-segment-pill',
+        x: labelX - 27,
+        y: labelY - 11,
+        width: 54,
+        height: 22,
+        rx: 7,
+        ry: 7
+      });
+      const text = E('text', { class: 'short-segment-text', x: labelX, y: labelY });
+      text.textContent = `${formatLength(segmentLength)} m`;
+
+      const toggle = event => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleManualSegment(state.definition.id, segmentIndex);
+      };
+      group.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      group.addEventListener('pointerup', toggle);
+      group.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        toggle(event);
+      });
+      group.append(leader, hit, pill, text);
+      shortSegmentSelectorsGroup.appendChild(group);
+      setShortSegmentSelectorTransform(group);
+      return group;
+    }
+
     function applyViewBox() {
       svg.setAttribute('viewBox', `${currentViewBox.x} ${currentViewBox.y} ${currentViewBox.width} ${currentViewBox.height}`);
       updateGuideVisibility();
@@ -453,6 +597,8 @@
     function updateGuideVisibility() {
       const show = currentViewBox.width <= INITIAL_VIEW_BOX.width * GUIDE_VISIBILITY_RATIO;
       document.querySelectorAll('.segment-guides').forEach(g => g.classList.toggle('visible', show));
+      shortSegmentSelectorsGroup.classList.toggle('visible', show);
+      updateShortSegmentSelectorScale();
     }
 
     function clampViewBox() {
@@ -489,7 +635,7 @@
     function resetView() { currentViewBox = { ...INITIAL_VIEW_BOX }; applyViewBox(); }
 
     function isInteractiveTarget(target) {
-      return Boolean(target.closest('.hit, .node, .node-label, .distance-group, .zoom-btn, .model-filter-ui'));
+      return Boolean(target.closest('.hit, .node, .node-label, .distance-group, .short-segment-selector, .zoom-btn, .model-filter-ui'));
     }
 
     function markPointerMoved(pointer) {
@@ -594,7 +740,11 @@
     }
 
     function isSegmentActive(state, index) { return state.activitySegmentCount[index] > 0; }
-    function refreshSegment(state, index) { state.segmentOverlays[index].classList.toggle('active', isSegmentActive(state,index)); }
+    function refreshSegment(state, index) {
+      const active = isSegmentActive(state, index);
+      state.segmentOverlays[index].classList.toggle('active', active);
+      state.shortSegmentSelectors[index]?.classList.toggle('active', active);
+    }
     function refreshFullLine(state) { state.fullOverlay.classList.toggle('active', state.segmentOverlays.every((_,i)=>isSegmentActive(state,i))); }
     function refreshLine(state) { state.segmentOverlays.forEach((_,i)=>refreshSegment(state,i)); refreshFullLine(state); }
 
@@ -830,6 +980,52 @@
       touched.forEach(id => refreshLine(lineStates.get(id)));
     }
 
+    function calculateLineProgress(kind) {
+      let completedLength = 0;
+      let totalLength = 0;
+      let missingCount = 0;
+
+      lineStates.forEach(state => {
+        if (state.definition.kind !== kind) return;
+        if (!hasKnownLength(state.definition)) {
+          missingCount += 1;
+          return;
+        }
+
+        totalLength += Number(state.definition.meters);
+        state.segmentLengths.forEach((segmentLength, segmentIndex) => {
+          if (!isSegmentActive(state, segmentIndex)) return;
+          const value = Number(segmentLength);
+          if (Number.isFinite(value)) completedLength += value;
+        });
+      });
+
+      completedLength = Math.min(completedLength, totalLength);
+      const percentage = totalLength > 0 ? completedLength / totalLength * 100 : 0;
+      return {
+        completedLength: Number(completedLength.toFixed(2)),
+        totalLength: Number(totalLength.toFixed(2)),
+        percentage: Number(percentage.toFixed(2)),
+        missingCount
+      };
+    }
+
+    function formatProgress(progress) {
+      const knownLabel = progress.missingCount > 0 ? ' conocidos' : '';
+      return `${formatLength(progress.completedLength)} m / ${formatLength(progress.totalLength)} m${knownLabel}; ${formatLength(progress.percentage)} %`;
+    }
+
+    function updateProgressPanel() {
+      const collectorProgress = calculateLineProgress('collector');
+      const branchProgress = calculateLineProgress('branch');
+      collectorProgressText.textContent = formatProgress(collectorProgress);
+      branchProgressText.textContent = formatProgress(branchProgress);
+      branchProgressWarning.hidden = branchProgress.missingCount === 0;
+      branchProgressWarning.textContent = branchProgress.missingCount === 1
+        ? 'Falta por definir 1 longitud de tirante.'
+        : `Faltan por definir ${branchProgress.missingCount} longitudes de tirantes.`;
+    }
+
     function rebuildActivityMarks() {
       clearAllVisualMarks();
       activities.forEach(activity => {
@@ -854,6 +1050,7 @@
         }
       });
       saveActivities();
+      updateProgressPanel();
       checkVictory();
     }
 
@@ -961,12 +1158,13 @@
       const branch = def.kind === 'branch';
       const base = E('path', { class: `base-line${branch ? ' branch' : ''}`, d:def.d });
       baseLinesGroup.appendChild(base);
-      const measure = E('path', { class:'measure-path', d:def.d, fill:'none', stroke:'none' });
+      const visibleD = visibleLinePath(def);
+      const measure = E('path', { class:'measure-path', d:visibleD, fill:'none', stroke:'none' });
       svg.appendChild(measure);
       const total = measure.getTotalLength();
       const knownLength = hasKnownLength(def);
       const segmentLengths = knownLength ? lengths(def.meters) : [null];
-      const fullOverlay = E('path', { class: `full-overlay${branch ? ' branch' : ''}`, d:def.d });
+      const fullOverlay = E('path', { class: `full-overlay${branch ? ' branch' : ''}`, d:visibleD });
       fullLineOverlaysGroup.appendChild(fullOverlay);
       const saved = savedLineSettings[def.id] || {};
       const state = {
@@ -976,6 +1174,7 @@
         segmentLengths,
         segmentOverlays:[],
         activitySegmentCount:segmentLengths.map(()=>0),
+        shortSegmentSelectors:[],
         fullOverlay,
         guideGroup:null,
         distanceGroup:null,
@@ -984,21 +1183,22 @@
 
       if (knownLength) {
         let acc = 0;
-        segmentLengths.forEach(segmentMeters => {
+        segmentLengths.forEach((segmentMeters, segmentIndex) => {
           const start = total * (acc / def.meters);
           const end = total * ((acc + segmentMeters) / def.meters);
           const overlay = E('path', { class: `segment-overlay${branch ? ' branch' : ''}`, d: poly(measure, start, end) });
           state.segmentOverlays.push(overlay);
           segmentOverlaysGroup.appendChild(overlay);
+          state.shortSegmentSelectors[segmentIndex] = addShortSegmentSelector(state, segmentIndex, start, end);
           acc += segmentMeters;
         });
       } else {
-        const overlay = E('path', { class: `segment-overlay${branch ? ' branch' : ''}`, d:def.d });
+        const overlay = E('path', { class: `segment-overlay${branch ? ' branch' : ''}`, d:visibleD });
         state.segmentOverlays.push(overlay);
         segmentOverlaysGroup.appendChild(overlay);
       }
 
-      const hit = E('path', { class:'hit', d:def.d });
+      const hit = E('path', { class:'hit', d:visibleD });
       lineHitboxesGroup.appendChild(hit);
       state.guideGroup = addSegmentGuides(measure, def);
       state.distanceGroup = addDistanceLabel(measure, def);
@@ -1014,19 +1214,19 @@
 
     function buildNodes() {
       nodeDefs.forEach(n => {
+        const circle = E('circle', { class:`node${n.main ? ' main' : ''}`, cx:n.x, cy:n.y, r:n.radius, 'data-node-id':n.id, 'data-active':'false' });
+        circle.addEventListener('pointerup', (event) => { if (shouldSuppressTap(event)) return; toggleNode(n.id); });
+        nodesGroup.appendChild(circle);
+
         if (n.main) {
           const ring = E('circle', {
             class: 'camera-ring',
             cx: n.x,
             cy: n.y,
-            r: n.radius + 1.05
+            r: n.radius - 1.05
           });
           nodesGroup.appendChild(ring);
         }
-
-        const circle = E('circle', { class:`node${n.main ? ' main' : ''}`, cx:n.x, cy:n.y, r:n.radius, 'data-node-id':n.id, 'data-active':'false' });
-        circle.addEventListener('pointerup', (event) => { if (shouldSuppressTap(event)) return; toggleNode(n.id); });
-        nodesGroup.appendChild(circle);
       });
       placeLabels();
     }
@@ -1211,7 +1411,7 @@
   filterLabel.innerHTML = '<input id="rockZonesFilterCheckbox" type="checkbox" checked /><span>Zona rocosa.</span>';
   filtersStack.appendChild(filterLabel);
   const filtersObject = document.getElementById('modelFiltersObject');
-  if (filtersObject) filtersObject.setAttribute('height', '154');
+  if (filtersObject) filtersObject.setAttribute('height', '260');
 
   const activitiesPanel = document.querySelector('.panel');
   const rockSection = document.createElement('section');
