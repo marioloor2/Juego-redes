@@ -99,7 +99,7 @@
     .delete-btn { width: 28px; height: 28px; padding: 0; border-radius: 50%; background: #fee2e2; color: #dc2626; font-size: 18px; font-weight: 800; line-height: 1; }
     .backdrop { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(0,0,0,.45); }
     .backdrop.open { display: flex; }
-    .modal { width: min(100%, 430px); padding: 20px; background: #fff; border-radius: 18px; text-align: left; box-shadow: 0 18px 60px rgba(0,0,0,.28); }
+    .modal { width: min(100%, 430px); max-height: calc(100vh - 36px); overflow-y: auto; padding: 20px; background: #fff; border-radius: 18px; text-align: left; box-shadow: 0 18px 60px rgba(0,0,0,.28); }
     .modal h2 { margin: 0 0 6px; font-size: 22px; }
     .modal-subtitle { margin: 0 0 16px; color: #666; font-size: 14px; }
     .attr-table { width: 100%; margin-bottom: 18px; border-collapse: collapse; }
@@ -109,6 +109,10 @@
     .form-grid { display: grid; gap: 14px; margin-bottom: 18px; }
     .form-field { display: grid; gap: 6px; }
     .form-field label { color: #374151; font-size: 14px; font-weight: 700; }
+    .full-length-option { display: flex !important; align-items: center; gap: 9px; margin-top: 3px; cursor: pointer; }
+    .form-field .full-length-checkbox { width: 18px; height: 18px; margin: 0; padding: 0; accent-color: #16a34a; cursor: pointer; }
+    .activity-length-hint { min-height: 17px; color: #4b5563; font-size: 12px; line-height: 1.35; }
+    .form-field input:disabled { background: #f3f4f6; color: #374151; opacity: 1; }
     .form-error { min-height: 20px; margin: -4px 0 12px; color: #b91c1c; font-size: 14px; font-weight: 700; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
     .secondary { background: #e5e7eb; color: #111; }
@@ -239,7 +243,15 @@
         <div class="form-grid">
           <div class="form-field"><label for="startCameraInput">Cámara de inicio</label><input id="startCameraInput" type="text" placeholder="Ej.: CA5" autocomplete="off" required /></div>
           <div class="form-field"><label for="endCameraInput">Cámara de fin</label><input id="endCameraInput" type="text" placeholder="Ej.: CA11" autocomplete="off" required /></div>
-          <div class="form-field"><label for="activityLengthInput">Longitud (m)</label><input id="activityLengthInput" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="Ej.: 25" required /></div>
+          <div class="form-field">
+            <label for="activityLengthInput">Longitud (m)</label>
+            <input id="activityLengthInput" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="Ej.: 25" required />
+            <label class="full-length-option" for="activityFullLengthCheckbox">
+              <input id="activityFullLengthCheckbox" class="full-length-checkbox" type="checkbox" />
+              <span>Longitud completa del tramo</span>
+            </label>
+            <div id="activityFullLengthHint" class="activity-length-hint" aria-live="polite"></div>
+          </div>
           <div class="form-field"><label for="activityDateInput">Fecha</label><input id="activityDateInput" type="date" required /></div>
         </div>
         <div id="activityFormError" class="form-error"></div>
@@ -356,6 +368,8 @@
     const startCameraInput = document.getElementById("startCameraInput");
     const endCameraInput = document.getElementById("endCameraInput");
     const activityLengthInput = document.getElementById("activityLengthInput");
+    const activityFullLengthCheckbox = document.getElementById("activityFullLengthCheckbox");
+    const activityFullLengthHint = document.getElementById("activityFullLengthHint");
     const activityDateInput = document.getElementById("activityDateInput");
     const activityFormError = document.getElementById("activityFormError");
     const cancelActivityButton = document.getElementById("cancelActivityButton");
@@ -372,6 +386,7 @@
     let activities = [];
     let selectedLineId = null;
     let selectedNodeId = null;
+    let commentPlacementMode = false;
 
     const DIAGRAM_VIEW_BOX_WIDTH = 1092.19;
     const INITIAL_VIEW_BOX = { x: -175, y: 34.53, width: 1157.19, height: 1370.95 };
@@ -463,6 +478,7 @@
       let timer = null;
       let lastTap = 0;
       group.addEventListener('pointerup', (event) => {
+        if (commentPlacementMode) return;
         event.preventDefault();
         event.stopPropagation();
         if (shouldSuppressTap(event)) return;
@@ -570,11 +586,13 @@
       text.textContent = `${formatLength(segmentLength)} m`;
 
       const toggle = event => {
+        if (commentPlacementMode) return;
         event.preventDefault();
         event.stopPropagation();
         toggleManualSegment(state.definition.id, segmentIndex);
       };
       group.addEventListener('pointerdown', event => {
+        if (commentPlacementMode) return;
         event.preventDefault();
         event.stopPropagation();
       });
@@ -635,7 +653,7 @@
     function resetView() { currentViewBox = { ...INITIAL_VIEW_BOX }; applyViewBox(); }
 
     function isInteractiveTarget(target) {
-      return Boolean(target.closest('.hit, .node, .node-label, .distance-group, .short-segment-selector, .zoom-btn, .model-filter-ui'));
+      return Boolean(target.closest('.hit, .node, .node-label, .distance-group, .short-segment-selector, .comment-marker, .zoom-btn, .model-filter-ui'));
     }
 
     function markPointerMoved(pointer) {
@@ -710,7 +728,7 @@
       svg.addEventListener('pointerleave', (event) => { if (activePointers.has(event.pointerId)) finishPointer(event); });
       svg.addEventListener('wheel', (event) => { event.preventDefault(); zoomAroundPoint(event.deltaY < 0 ? 0.88 : 1.14, clientToSvg(event.clientX, event.clientY)); }, { passive:false });
       svg.addEventListener('pointerup', (event) => {
-        if (event.button !== 0 || event.isPrimary === false || isInteractiveTarget(event.target) || shouldSuppressTap(event)) {
+        if (commentPlacementMode || event.button !== 0 || event.isPrimary === false || isInteractiveTarget(event.target) || shouldSuppressTap(event)) {
           lastEmptyTapTime = 0;
           return;
         }
@@ -1124,7 +1142,47 @@
       });
     }
 
-    function openActivityModal() { activityForm.reset(); activityFormError.textContent=''; activityDateInput.value = todayInputDate(); activityModal.classList.add('open'); activityModal.setAttribute('aria-hidden','false'); setTimeout(() => startCameraInput.focus(), 40); }
+    function updateFullLengthOption() {
+      const useFullLength = activityFullLengthCheckbox.checked;
+      activityLengthInput.disabled = useFullLength;
+      activityLengthInput.required = !useFullLength;
+      if (!useFullLength) {
+        activityFullLengthHint.textContent = '';
+        return;
+      }
+
+      const startCamera = resolveMainCameraName(startCameraInput.value);
+      const endCamera = resolveMainCameraName(endCameraInput.value);
+      if (!startCamera || !endCamera || startCamera === endCamera) {
+        activityLengthInput.value = '';
+        activityFullLengthHint.textContent = 'Indica dos cámaras válidas para calcular la longitud completa.';
+        return;
+      }
+
+      const capacity = getAvailableLength(startCamera, endCamera);
+      if (!capacity.ok) {
+        activityLengthInput.value = '';
+        activityFullLengthHint.textContent = capacity.message;
+        return;
+      }
+
+      activityLengthInput.value = capacity.availableLength > 0 ? capacity.availableLength.toFixed(2) : '';
+      activityFullLengthHint.textContent = capacity.availableLength > 0
+        ? `Se registrarán ${formatLength(capacity.availableLength)} m disponibles.`
+        : 'Este tramo ya está completamente registrado.';
+    }
+
+    function openActivityModal() {
+      activityForm.reset();
+      activityLengthInput.disabled = false;
+      activityLengthInput.required = true;
+      activityFullLengthHint.textContent = '';
+      activityFormError.textContent = '';
+      activityDateInput.value = todayInputDate();
+      activityModal.classList.add('open');
+      activityModal.setAttribute('aria-hidden','false');
+      setTimeout(() => startCameraInput.focus(), 40);
+    }
     function closeActivityModal() { activityModal.classList.remove('open'); activityModal.setAttribute('aria-hidden','true'); activityFormError.textContent=''; }
 
     function registerActivity(event) {
@@ -1133,12 +1191,11 @@
       const endText = normalizeName(endCameraInput.value);
       const startCamera = resolveMainCameraName(startCameraInput.value);
       const endCamera = resolveMainCameraName(endCameraInput.value);
-      const lengthValue = Number(activityLengthInput.value);
+      const useFullLength = activityFullLengthCheckbox.checked;
       const date = activityDateInput.value;
       if (!startText || !endText) { activityFormError.textContent = 'Debes escribir la cámara de inicio y la cámara de fin.'; return; }
       if (!startCamera || !endCamera) { activityFormError.textContent = `Por ahora las cámaras válidas son: ${validCameras.map(getNodeDisplayName).join(', ')}.`; return; }
       if (startCamera === endCamera) { activityFormError.textContent = 'La cámara de inicio y la cámara de fin no pueden ser la misma.'; return; }
-      if (!Number.isFinite(lengthValue) || lengthValue <= 0) { activityFormError.textContent = 'La longitud debe ser un número mayor que cero.'; return; }
       if (!date) { activityFormError.textContent = 'Debes seleccionar una fecha.'; return; }
 
       const capacity = getAvailableLength(startCamera, endCamera);
@@ -1148,15 +1205,21 @@
         return;
       }
 
-      if (lengthValue > capacity.availableLength + 1e-9) {
-        activityFormError.textContent =
-          `Solo hay espacio para ${formatLength(capacity.availableLength)} m entre ${getNodeDisplayName(startCamera)} y ${getNodeDisplayName(endCamera)}.`;
-        return;
-      }
-
       if (capacity.availableLength <= 0) {
         activityFormError.textContent =
           `Solo hay espacio para 0 m entre ${getNodeDisplayName(startCamera)} y ${getNodeDisplayName(endCamera)}. La línea ya está completa.`;
+        return;
+      }
+
+      const lengthValue = useFullLength ? capacity.availableLength : Number(activityLengthInput.value);
+      if (!Number.isFinite(lengthValue) || lengthValue <= 0) {
+        activityFormError.textContent = 'La longitud debe ser un número mayor que cero.';
+        return;
+      }
+
+      if (lengthValue > capacity.availableLength + 1e-9) {
+        activityFormError.textContent =
+          `Solo hay espacio para ${formatLength(capacity.availableLength)} m entre ${getNodeDisplayName(startCamera)} y ${getNodeDisplayName(endCamera)}.`;
         return;
       }
 
@@ -1235,6 +1298,7 @@
       state.distanceGroup = addDistanceLabel(measure, def);
       lineStates.set(def.id, state);
       hit.addEventListener('pointerup', (event) => {
+        if (commentPlacementMode) return;
         event.preventDefault();
         if (shouldSuppressTap(event)) return;
         const point = clientToSvg(event.clientX, event.clientY);
@@ -1246,7 +1310,7 @@
     function buildNodes() {
       nodeDefs.forEach(n => {
         const circle = E('circle', { class:`node${n.main ? ' main' : ''}`, cx:n.x, cy:n.y, r:n.radius, 'data-node-id':n.id, 'data-active':'false' });
-        circle.addEventListener('pointerup', (event) => { if (shouldSuppressTap(event)) return; toggleNode(n.id); });
+        circle.addEventListener('pointerup', (event) => { if (commentPlacementMode || shouldSuppressTap(event)) return; toggleNode(n.id); });
         nodesGroup.appendChild(circle);
 
         if (n.main) {
@@ -1296,6 +1360,7 @@
         let labelTapTimer = null;
         let lastLabelTap = 0;
         text.addEventListener('pointerup', event => {
+          if (commentPlacementMode) return;
           event.preventDefault();
           event.stopPropagation();
           if (shouldSuppressTap(event)) return;
@@ -1311,6 +1376,7 @@
           labelTapTimer = setTimeout(() => { labelTapTimer = null; }, DOUBLE_TAP_DELAY);
         });
         text.addEventListener('dblclick', event => {
+          if (commentPlacementMode) return;
           event.preventDefault();
           event.stopPropagation();
           openNodeNameEditor(n.id);
@@ -1403,6 +1469,13 @@
     });
     openActivityButton.addEventListener('click', openActivityModal);
     cancelActivityButton.addEventListener('click', closeActivityModal);
+    activityFullLengthCheckbox.addEventListener('change', updateFullLengthOption);
+    startCameraInput.addEventListener('input', () => {
+      if (activityFullLengthCheckbox.checked) updateFullLengthOption();
+    });
+    endCameraInput.addEventListener('input', () => {
+      if (activityFullLengthCheckbox.checked) updateFullLengthOption();
+    });
     activityForm.addEventListener('submit', registerActivity);
     attributeModal.addEventListener('pointerdown', (event) => { if (event.target === attributeModal) closeAttributes(); });
     nodeNameModal.addEventListener('pointerdown', (event) => { if (event.target === nodeNameModal) closeNodeNameEditor(); });
@@ -1734,6 +1807,357 @@
       closeRockZoneModal();
     }
   });
+})();
+</script>
+
+<style>
+  .comment-btn { flex-basis: 100% !important; background: #2563eb; }
+  .comment-btn.active { background: #1d4ed8; box-shadow: 0 0 0 3px rgba(37,99,235,.22); }
+  .viewport.comment-placement-mode,
+  .viewport.comment-placement-mode svg,
+  .viewport.comment-placement-mode svg * { cursor: crosshair !important; }
+  .viewport.comment-placement-mode .model-filter-ui,
+  .viewport.comment-placement-mode .model-filter-ui * { cursor: auto !important; }
+  .viewport.comment-placement-mode .comment-marker { cursor: pointer !important; }
+  .comment-cursor {
+    position: absolute;
+    z-index: 12;
+    display: none;
+    pointer-events: none;
+    transform: translate(8px, -30px);
+    font-size: 23px;
+    line-height: 1;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,.24));
+  }
+  .comment-marker { cursor: pointer; outline: none; }
+  .comment-marker-hit { fill: transparent; pointer-events: all; }
+  .comment-marker-bg { fill: #fff; stroke: #2563eb; stroke-width: 2; pointer-events: none; }
+  .comment-marker-icon {
+    fill: #1d4ed8;
+    font-family: "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
+    font-size: 17px;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    pointer-events: none;
+  }
+  .comment-textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 10px;
+    border: 1px solid #bfc5ce;
+    border-radius: 9px;
+    font: inherit;
+    line-height: 1.4;
+    resize: vertical;
+  }
+  .comment-delete-btn { margin-right: auto; background: #dc2626; }
+</style>
+<script>
+(function() {
+  const COMMENTS_KEY = 'redVerde_autocad_comments_v1';
+  const actionsBox = document.querySelector('.actions');
+  const commentButton = document.createElement('button');
+  commentButton.id = 'toggleCommentModeButton';
+  commentButton.type = 'button';
+  commentButton.className = 'comment-btn';
+  commentButton.textContent = 'Registrar comentario';
+  commentButton.setAttribute('aria-pressed', 'false');
+  actionsBox.appendChild(commentButton);
+
+  const filtersStack = document.querySelector('.model-filter-stack');
+  const commentFilterLabel = document.createElement('label');
+  commentFilterLabel.className = 'filter-row';
+  commentFilterLabel.setAttribute('for', 'commentsFilterCheckbox');
+  commentFilterLabel.innerHTML = '<input id="commentsFilterCheckbox" type="checkbox" checked /><span>Comentarios</span>';
+  filtersStack.appendChild(commentFilterLabel);
+  const filtersObject = document.getElementById('modelFiltersObject');
+  if (filtersObject) filtersObject.setAttribute('height', '290');
+
+  const commentCursor = document.createElement('div');
+  commentCursor.className = 'comment-cursor';
+  commentCursor.textContent = '💬';
+  viewport.appendChild(commentCursor);
+
+  const commentModal = document.createElement('div');
+  commentModal.id = 'commentModal';
+  commentModal.className = 'backdrop';
+  commentModal.setAttribute('aria-hidden', 'true');
+  commentModal.innerHTML = `
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="commentModalTitle">
+      <h2 id="commentModalTitle">Registrar comentario</h2>
+      <p id="commentModalSubtitle" class="modal-subtitle">Escribe la observación correspondiente a este punto del plano.</p>
+      <form id="commentForm" novalidate>
+        <div class="form-field">
+          <label for="commentTextInput">Comentario</label>
+          <textarea id="commentTextInput" class="comment-textarea" maxlength="1000" placeholder="Escribe aquí el comentario..." required></textarea>
+        </div>
+        <div id="commentFormError" class="form-error"></div>
+        <div class="modal-actions">
+          <button id="deleteCommentButton" class="comment-delete-btn" type="button">Eliminar</button>
+          <button id="cancelCommentButton" class="secondary" type="button">Cancelar</button>
+          <button type="submit">Guardar comentario</button>
+        </div>
+      </form>
+    </section>
+  `;
+  document.body.appendChild(commentModal);
+
+  const commentsFilterCheckbox = document.getElementById('commentsFilterCheckbox');
+  const commentForm = document.getElementById('commentForm');
+  const commentModalTitle = document.getElementById('commentModalTitle');
+  const commentModalSubtitle = document.getElementById('commentModalSubtitle');
+  const commentTextInput = document.getElementById('commentTextInput');
+  const commentFormError = document.getElementById('commentFormError');
+  const deleteCommentButton = document.getElementById('deleteCommentButton');
+  const cancelCommentButton = document.getElementById('cancelCommentButton');
+
+  const commentsGroup = document.createElementNS(SVG_NS, 'g');
+  commentsGroup.setAttribute('id', 'commentsGroup');
+  const shortSelectorsLayer = document.getElementById('shortSegmentSelectorsGroup');
+  svg.insertBefore(commentsGroup, shortSelectorsLayer);
+
+  let comments = loadComments();
+  let selectedCommentId = null;
+  let pendingCommentPoint = null;
+
+  function loadComments() {
+    try {
+      const saved = localStorage.getItem(COMMENTS_KEY);
+      const parsed = saved ? JSON.parse(saved) : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(comment =>
+        comment &&
+        typeof comment.text === 'string' &&
+        Number.isFinite(Number(comment.x)) &&
+        Number.isFinite(Number(comment.y))
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  function saveComments() {
+    try { localStorage.setItem(COMMENTS_KEY, JSON.stringify(comments)); } catch {}
+  }
+
+  function loadCommentsFilterSetting() {
+    try {
+      const saved = localStorage.getItem(FILTER_SETTINGS_KEY);
+      const parsed = saved ? JSON.parse(saved) : {};
+      return parsed?.showComments !== false;
+    } catch {
+      return true;
+    }
+  }
+
+  function saveAllFilterSettings() {
+    try {
+      const rockCheckbox = document.getElementById('rockZonesFilterCheckbox');
+      localStorage.setItem(FILTER_SETTINGS_KEY, JSON.stringify({
+        showPointNames: labelsFilterCheckbox.checked,
+        showRockZones: rockCheckbox ? rockCheckbox.checked : true,
+        showComments: commentsFilterCheckbox.checked
+      }));
+    } catch {}
+  }
+
+  function applyCommentsFilter() {
+    commentsGroup.style.display = commentsFilterCheckbox.checked ? '' : 'none';
+  }
+
+  function setCommentMarkerTransform(group) {
+    const scale = currentViewBox.width / INITIAL_VIEW_BOX.width;
+    group.setAttribute('transform', `translate(${group.dataset.x} ${group.dataset.y}) scale(${scale})`);
+  }
+
+  function updateCommentMarkerScale() {
+    commentsGroup.querySelectorAll('.comment-marker').forEach(setCommentMarkerTransform);
+  }
+
+  function markerDescription(comment) {
+    const compact = comment.text.replace(/\s+/g, ' ').trim();
+    return compact.length > 60 ? `${compact.slice(0, 57)}...` : compact;
+  }
+
+  function openExistingComment(comment) {
+    setCommentPlacementMode(false);
+    selectedCommentId = comment.id;
+    pendingCommentPoint = null;
+    commentModalTitle.textContent = 'Comentario';
+    commentModalSubtitle.textContent = 'Puedes leer, editar o eliminar esta observación.';
+    commentTextInput.value = comment.text;
+    commentFormError.textContent = '';
+    deleteCommentButton.style.display = '';
+    commentModal.classList.add('open');
+    commentModal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => commentTextInput.focus(), 40);
+  }
+
+  function renderComments() {
+    commentsGroup.innerHTML = '';
+    comments.forEach(comment => {
+      const group = E('g', {
+        class: 'comment-marker',
+        role: 'button',
+        tabindex: '0',
+        'aria-label': `Comentario: ${markerDescription(comment)}`
+      });
+      group.dataset.x = Number(comment.x).toFixed(2);
+      group.dataset.y = Number(comment.y).toFixed(2);
+      const hit = E('circle', { class:'comment-marker-hit', cx:0, cy:0, r:22 });
+      const background = E('circle', { class:'comment-marker-bg', cx:0, cy:0, r:14 });
+      const icon = E('text', { class:'comment-marker-icon', x:0, y:1 });
+      icon.textContent = '💬';
+      const open = event => {
+        event.preventDefault();
+        event.stopPropagation();
+        openExistingComment(comment);
+      };
+      group.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      group.addEventListener('pointerup', open);
+      group.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        open(event);
+      });
+      group.append(hit, background, icon);
+      commentsGroup.appendChild(group);
+      setCommentMarkerTransform(group);
+    });
+    applyCommentsFilter();
+  }
+
+  function setCommentPlacementMode(active) {
+    commentPlacementMode = Boolean(active);
+    commentButton.classList.toggle('active', commentPlacementMode);
+    commentButton.setAttribute('aria-pressed', commentPlacementMode ? 'true' : 'false');
+    commentButton.textContent = commentPlacementMode ? 'Selecciona un punto…' : 'Registrar comentario';
+    viewport.classList.toggle('comment-placement-mode', commentPlacementMode);
+    if (!commentPlacementMode) commentCursor.style.display = 'none';
+    if (commentPlacementMode) {
+      commentsFilterCheckbox.checked = true;
+      applyCommentsFilter();
+      saveAllFilterSettings();
+    }
+  }
+
+  function openNewComment(point) {
+    setCommentPlacementMode(false);
+    selectedCommentId = null;
+    pendingCommentPoint = {
+      x: Number(point.x.toFixed(2)),
+      y: Number(point.y.toFixed(2))
+    };
+    commentModalTitle.textContent = 'Registrar comentario';
+    commentModalSubtitle.textContent = 'Escribe la observación correspondiente a este punto del plano.';
+    commentTextInput.value = '';
+    commentFormError.textContent = '';
+    deleteCommentButton.style.display = 'none';
+    commentModal.classList.add('open');
+    commentModal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => commentTextInput.focus(), 40);
+  }
+
+  function closeCommentModal() {
+    selectedCommentId = null;
+    pendingCommentPoint = null;
+    commentFormError.textContent = '';
+    commentModal.classList.remove('open');
+    commentModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function saveComment(event) {
+    event.preventDefault();
+    const text = commentTextInput.value.trim();
+    if (!text) {
+      commentFormError.textContent = 'El comentario no puede quedar vacío.';
+      return;
+    }
+
+    if (selectedCommentId) {
+      const comment = comments.find(item => item.id === selectedCommentId);
+      if (comment) comment.text = text;
+    } else if (pendingCommentPoint) {
+      comments.push({
+        id: (crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`),
+        x: pendingCommentPoint.x,
+        y: pendingCommentPoint.y,
+        text
+      });
+    }
+    saveComments();
+    renderComments();
+    closeCommentModal();
+  }
+
+  function deleteSelectedComment() {
+    if (!selectedCommentId) return;
+    comments = comments.filter(comment => comment.id !== selectedCommentId);
+    saveComments();
+    renderComments();
+    closeCommentModal();
+  }
+
+  const previousApplyViewBox = applyViewBox;
+  applyViewBox = function() {
+    previousApplyViewBox();
+    updateCommentMarkerScale();
+  };
+
+  commentButton.addEventListener('click', () => setCommentPlacementMode(!commentPlacementMode));
+  viewport.addEventListener('pointermove', event => {
+    if (!commentPlacementMode || event.pointerType === 'touch' || event.target.closest('.comment-marker, .model-filter-ui')) {
+      commentCursor.style.display = 'none';
+      return;
+    }
+    const rect = viewport.getBoundingClientRect();
+    commentCursor.style.left = `${event.clientX - rect.left}px`;
+    commentCursor.style.top = `${event.clientY - rect.top}px`;
+    commentCursor.style.display = 'block';
+  });
+  viewport.addEventListener('pointerleave', () => { commentCursor.style.display = 'none'; });
+
+  svg.addEventListener('pointerup', event => {
+    if (!commentPlacementMode || event.button !== 0 || event.isPrimary === false) return;
+    if (Date.now() < suppressTapUntil || multiTouchGesture) return;
+    if (event.target.closest('.comment-marker, .model-filter-ui')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openNewComment(clientToSvg(event.clientX, event.clientY));
+  });
+
+  commentForm.addEventListener('submit', saveComment);
+  cancelCommentButton.addEventListener('click', closeCommentModal);
+  deleteCommentButton.addEventListener('click', deleteSelectedComment);
+  commentModal.addEventListener('pointerdown', event => {
+    if (event.target === commentModal) closeCommentModal();
+  });
+
+  commentsFilterCheckbox.checked = loadCommentsFilterSetting();
+  commentsFilterCheckbox.addEventListener('change', () => {
+    applyCommentsFilter();
+    saveAllFilterSettings();
+  });
+  labelsFilterCheckbox.addEventListener('change', saveAllFilterSettings);
+  document.getElementById('rockZonesFilterCheckbox')?.addEventListener('change', saveAllFilterSettings);
+
+  resetButton.addEventListener('click', () => {
+    comments = [];
+    saveComments();
+    renderComments();
+    setCommentPlacementMode(false);
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    if (commentModal.classList.contains('open')) closeCommentModal();
+    else if (commentPlacementMode) setCommentPlacementMode(false);
+  });
+
+  renderComments();
+  updateCommentMarkerScale();
 })();
 </script>
 
