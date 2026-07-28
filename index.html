@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#ffffff" />
   <title>Red Verde · AutoCAD PDF esquemático</title>
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
   <style>
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body {
@@ -82,18 +83,27 @@
     .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
     .actions button { flex: 1 1 130px; }
     button { border: 0; border-radius: 12px; padding: 12px 18px; background: #111; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .45; }
     .activity-btn { background: #16a34a; }
     .panel h2 { margin: 0 0 10px; font-size: 18px; }
+    .activities-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+    .activities-heading h2 { margin: 0; }
+    .group-activities-btn { flex: 0 0 auto; padding: 8px 12px; border-radius: 9px; background: #2563eb; font-size: 13px; }
+    .group-activities-message { min-height: 18px; margin: 0 0 7px; color: #4b5563; font-size: 12px; line-height: 1.35; }
+    .group-activities-message.error { color: #b91c1c; font-weight: 700; }
+    .group-activities-message.success { color: #15803d; font-weight: 700; }
     .activities-empty { margin: 0; padding: 16px 10px; color: #6b7280; text-align: center; font-size: 14px; }
     .table-wrap { overflow-x: auto; border: 1px solid #d1d5db; border-radius: 12px; background: #fff; }
     .activities { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; background: #fff; }
     .activities th, .activities td { padding: 8px 6px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 13px; vertical-align: middle; }
     .activities th { background: #f3f4f6; font-size: 12px; text-transform: uppercase; letter-spacing: .02em; }
-    .activities th:nth-child(1), .activities td:nth-child(1) { width: 28%; }
-    .activities th:nth-child(2), .activities td:nth-child(2) { width: 20%; }
-    .activities th:nth-child(3), .activities td:nth-child(3) { width: 40%; }
-    .activities th:nth-child(4), .activities td:nth-child(4) { width: 12%; text-align: center; }
+    .activities th:nth-child(1), .activities td:nth-child(1) { width: 9%; text-align: center; }
+    .activities th:nth-child(2), .activities td:nth-child(2) { width: 25%; }
+    .activities th:nth-child(3), .activities td:nth-child(3) { width: 18%; }
+    .activities th:nth-child(4), .activities td:nth-child(4) { width: 38%; }
+    .activities th:nth-child(5), .activities td:nth-child(5) { width: 10%; text-align: center; }
     .activities tbody tr:last-child td { border-bottom: 0; }
+    .activity-select { width: 18px; height: 18px; margin: 0; accent-color: #2563eb; cursor: pointer; }
     .date-input { width: 100%; min-width: 0; padding: 6px 4px; border: 1px solid #bfc5ce; border-radius: 7px; font-size: 12px; background: #fff; }
     .activity-dir { overflow-wrap: anywhere; font-weight: 700; }
     .delete-btn { width: 28px; height: 28px; padding: 0; border-radius: 50%; background: #fee2e2; color: #dc2626; font-size: 18px; font-weight: 800; line-height: 1; }
@@ -191,11 +201,15 @@
           <button id="openActivityButton" class="activity-btn" type="button">Registrar actividad</button>
         </div>
         <section class="panel" aria-live="polite">
-          <h2>Actividades registradas</h2>
+          <div class="activities-heading">
+            <h2>Actividades registradas</h2>
+            <button id="groupActivitiesButton" class="group-activities-btn" type="button" disabled>Agrupar</button>
+          </div>
+          <p id="groupActivitiesMessage" class="group-activities-message"></p>
           <p id="activitiesEmpty" class="activities-empty">Todavía no hay actividades.</p>
           <div id="activitiesWrapper" class="table-wrap">
             <table class="activities">
-              <thead><tr><th>Dir</th><th>Long</th><th>Fecha</th><th></th></tr></thead>
+              <thead><tr><th></th><th>Dir</th><th>Long</th><th>Fecha</th><th></th></tr></thead>
               <tbody id="activitiesBody"></tbody>
             </table>
           </div>
@@ -376,6 +390,8 @@
     const activitiesEmpty = document.getElementById("activitiesEmpty");
     const activitiesWrapper = document.getElementById("activitiesWrapper");
     const activitiesBody = document.getElementById("activitiesBody");
+    const groupActivitiesButton = document.getElementById("groupActivitiesButton");
+    const groupActivitiesMessage = document.getElementById("groupActivitiesMessage");
     const collectorProgressText = document.getElementById("collectorProgressText");
     const branchProgressText = document.getElementById("branchProgressText");
     const branchProgressWarning = document.getElementById("branchProgressWarning");
@@ -384,6 +400,7 @@
     const validCameras = nodeDefs.filter(n => n.main).map(n => n.id);
     const lineStates = new Map();
     let activities = [];
+    const selectedActivityIds = new Set();
     let selectedLineId = null;
     let selectedNodeId = null;
     let commentPlacementMode = false;
@@ -803,7 +820,11 @@
     }
 
     function findManualActivity(lineId, segmentIndex) {
-      return activities.find(a => a.source === 'manual' && Array.isArray(a.appliedSegments) && a.appliedSegments.length === 1 && a.appliedSegments[0].lineId === lineId && a.appliedSegments[0].segmentIndex === segmentIndex);
+      return activities.find(a =>
+        a.source === 'manual' &&
+        Array.isArray(a.appliedSegments) &&
+        a.appliedSegments.some(segment => segment.lineId === lineId && segment.segmentIndex === segmentIndex)
+      );
     }
 
     function createManualActivity(lineId, segmentIndex) {
@@ -823,9 +844,57 @@
       };
     }
 
+    function createManualGroup(template, segments, id=null) {
+      const ordered = [...segments].sort((a,b) => a.segmentIndex - b.segmentIndex);
+      const endpoints = getManualEndpoints(ordered[0]?.lineId);
+      const knownLengths = ordered.map(segment => Number(segment.segmentLength)).filter(Number.isFinite);
+      const appliedLength = knownLengths.length === ordered.length
+        ? Number(knownLengths.reduce((sum, value) => sum + value, 0).toFixed(2))
+        : null;
+      return {
+        ...template,
+        id: id || (crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`),
+        source: 'manual',
+        startCamera: endpoints.start,
+        endCamera: endpoints.end,
+        length: appliedLength,
+        appliedLength,
+        appliedSegments: ordered.map(segment => ({ ...segment }))
+      };
+    }
+
+    function splitConsecutiveSegments(segments) {
+      const ordered = [...segments].sort((a,b) =>
+        String(a.lineId).localeCompare(String(b.lineId)) || a.segmentIndex - b.segmentIndex
+      );
+      const groups = [];
+      ordered.forEach(segment => {
+        const current = groups[groups.length - 1];
+        const previous = current?.[current.length - 1];
+        if (!current || previous.lineId !== segment.lineId || segment.segmentIndex !== previous.segmentIndex + 1) {
+          groups.push([segment]);
+        } else {
+          current.push(segment);
+        }
+      });
+      return groups;
+    }
+
     function toggleManualSegment(lineId, segmentIndex) {
       const existing = findManualActivity(lineId, segmentIndex);
-      if (existing) activities = activities.filter(a => a.id !== existing.id); else activities.push(createManualActivity(lineId, segmentIndex));
+      if (existing) {
+        const activityIndex = activities.indexOf(existing);
+        const remaining = existing.appliedSegments.filter(segment =>
+          segment.lineId !== lineId || segment.segmentIndex !== segmentIndex
+        );
+        const replacements = splitConsecutiveSegments(remaining).map((segments, index) =>
+          createManualGroup(existing, segments, index === 0 ? existing.id : null)
+        );
+        selectedActivityIds.delete(existing.id);
+        activities.splice(activityIndex, 1, ...replacements);
+      } else {
+        activities.push(createManualActivity(lineId, segmentIndex));
+      }
       saveActivities(); rebuildActivityMarks(); renderActivities();
     }
 
@@ -1103,13 +1172,107 @@
       checkVictory();
     }
 
+    function setGroupActivitiesMessage(message='', type='') {
+      groupActivitiesMessage.textContent = message;
+      groupActivitiesMessage.classList.toggle('error', type === 'error');
+      groupActivitiesMessage.classList.toggle('success', type === 'success');
+    }
+
+    function updateGroupActivitiesButton() {
+      const selectedManualCount = activities.filter(activity =>
+        activity.source === 'manual' && selectedActivityIds.has(activity.id)
+      ).length;
+      groupActivitiesButton.disabled = selectedManualCount < 2;
+    }
+
+    function groupSelectedActivities() {
+      const selected = activities.filter(activity => selectedActivityIds.has(activity.id));
+      if (selected.length < 2) {
+        setGroupActivitiesMessage('Selecciona al menos dos actividades manuales.', 'error');
+        return;
+      }
+      if (selected.some(activity => activity.source !== 'manual')) {
+        setGroupActivitiesMessage('Solo se pueden agrupar actividades marcadas manualmente.', 'error');
+        return;
+      }
+
+      const first = selected[0];
+      if (selected.some(activity =>
+        activity.startCamera !== first.startCamera ||
+        activity.endCamera !== first.endCamera
+      )) {
+        setGroupActivitiesMessage('Las actividades deben pertenecer al mismo tramo y tener la misma dirección.', 'error');
+        return;
+      }
+      if (selected.some(activity => (activity.date || '') !== (first.date || ''))) {
+        setGroupActivitiesMessage('Las actividades deben tener la misma fecha.', 'error');
+        return;
+      }
+
+      const segments = selected.flatMap(activity =>
+        Array.isArray(activity.appliedSegments) ? activity.appliedSegments : []
+      );
+      const lineIds = new Set(segments.map(segment => segment.lineId));
+      if (!segments.length || lineIds.size !== 1) {
+        setGroupActivitiesMessage('Las actividades deben corresponder a una misma tubería.', 'error');
+        return;
+      }
+      if (segments.some(segment => !Number.isFinite(Number(segment.segmentLength)))) {
+        setGroupActivitiesMessage('Define primero la longitud de todos los segmentos seleccionados.', 'error');
+        return;
+      }
+
+      const orderedSegments = [...segments].sort((a,b) => a.segmentIndex - b.segmentIndex);
+      const uniqueIndexes = new Set(orderedSegments.map(segment => segment.segmentIndex));
+      const areConsecutive = uniqueIndexes.size === orderedSegments.length && orderedSegments.every((segment, index) =>
+        index === 0 || segment.segmentIndex === orderedSegments[index - 1].segmentIndex + 1
+      );
+      if (!areConsecutive) {
+        setGroupActivitiesMessage('Selecciona segmentos consecutivos para poder agruparlos.', 'error');
+        return;
+      }
+
+      const selectedIds = new Set(selected.map(activity => activity.id));
+      const insertionIndex = Math.min(...selected.map(activity => activities.indexOf(activity)));
+      const groupedActivity = createManualGroup(first, orderedSegments);
+      activities = activities.filter(activity => !selectedIds.has(activity.id));
+      activities.splice(insertionIndex, 0, groupedActivity);
+      selectedActivityIds.clear();
+      saveActivities();
+      rebuildActivityMarks();
+      renderActivities();
+      setGroupActivitiesMessage(
+        `Se agruparon ${selected.length} actividades en un registro de ${formatLength(groupedActivity.appliedLength)} m.`,
+        'success'
+      );
+    }
+
     function renderActivities() {
       activitiesBody.innerHTML = '';
+      selectedActivityIds.forEach(id => {
+        const activity = activities.find(item => item.id === id);
+        if (!activity || activity.source !== 'manual') selectedActivityIds.delete(id);
+      });
       const has = activities.length > 0;
       activitiesEmpty.style.display = has ? 'none' : 'block';
       activitiesWrapper.style.display = has ? 'block' : 'none';
       activities.forEach(activity => {
         const row = document.createElement('tr');
+        const selectCell = document.createElement('td');
+        if (activity.source === 'manual') {
+          const select = document.createElement('input');
+          select.type = 'checkbox';
+          select.className = 'activity-select';
+          select.checked = selectedActivityIds.has(activity.id);
+          select.setAttribute('aria-label', `Seleccionar actividad ${getNodeDisplayName(activity.startCamera)} a ${getNodeDisplayName(activity.endCamera)}`);
+          select.addEventListener('change', () => {
+            if (select.checked) selectedActivityIds.add(activity.id);
+            else selectedActivityIds.delete(activity.id);
+            setGroupActivitiesMessage();
+            updateGroupActivitiesButton();
+          });
+          selectCell.appendChild(select);
+        }
         const dir = document.createElement('td');
         dir.className = 'activity-dir';
         dir.textContent = `${getNodeDisplayName(activity.startCamera)} → ${getNodeDisplayName(activity.endCamera)}`;
@@ -1130,6 +1293,7 @@
         del.textContent = '×';
         del.title = 'Eliminar actividad';
         del.addEventListener('click', () => {
+          selectedActivityIds.delete(activity.id);
           activities = activities.filter(item => item.id !== activity.id);
           saveActivities();
           rebuildActivityMarks();
@@ -1137,9 +1301,10 @@
           renderActivities();
         });
         actions.appendChild(del);
-        row.append(dir, len, dateCell, actions);
+        row.append(selectCell, dir, len, dateCell, actions);
         activitiesBody.appendChild(row);
       });
+      updateGroupActivitiesButton();
     }
 
     function updateFullLengthOption() {
@@ -1425,6 +1590,8 @@
 
     resetButton.addEventListener('click', () => {
       activities = [];
+      selectedActivityIds.clear();
+      setGroupActivitiesMessage();
       saveActivities();
       rebuildActivityMarks();
       refreshNodeStates();
@@ -1468,6 +1635,7 @@
       }
     });
     openActivityButton.addEventListener('click', openActivityModal);
+    groupActivitiesButton.addEventListener('click', groupSelectedActivities);
     cancelActivityButton.addEventListener('click', closeActivityModal);
     activityFullLengthCheckbox.addEventListener('change', updateFullLengthOption);
     startCameraInput.addEventListener('input', () => {
