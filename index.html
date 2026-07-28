@@ -19,9 +19,8 @@
     h1 { margin: 0 0 4px; text-align: center; font-size: 27px; }
     .subtitle { margin: 0 0 8px; text-align: center; color: #555; }
     .note { margin: 0 0 12px; text-align: center; color: #6b7280; font-size: 13px; line-height: 1.4; }
-    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; align-items: start; }
+    .layout { display: block; }
     .network-col { min-width: 0; }
-    .side { min-width: 0; padding: 14px; border: 1px solid #e5e7eb; border-radius: 16px; background: #f9fafb; text-align: left; }
     .network-shell { overflow: hidden; border-radius: 16px; background: #fafafa; border: 1px solid #e5e7eb; }
     .toolbar { display: flex; justify-content: flex-end; gap: 8px; padding: 9px; border-bottom: 1px solid #e5e7eb; background: #fff; }
     .zoom-btn { min-width: 42px; min-height: 38px; padding: 7px 11px; border: 1px solid #d1d5db; border-radius: 10px; background: #fff; color: #111; font-size: 19px; line-height: 1; cursor: pointer; }
@@ -72,6 +71,27 @@
     .filter-row input { width: 18px; height: 18px; margin: 0; accent-color: #16a34a; cursor: pointer; }
     .model-filter-object { overflow: visible; }
     .model-filter-ui { width: 100%; height: 100%; font-family: Arial, sans-serif; pointer-events: auto; }
+    .model-activity-object { overflow: visible; }
+    .model-activity-ui {
+      width: 100%; height: 100%; padding-right: 3px; overflow-y: auto;
+      font-family: Arial, sans-serif; pointer-events: auto; text-align: left;
+      scrollbar-width: thin;
+    }
+    .model-activity-ui .actions { display: grid; gap: 8px; margin: 0 0 10px; }
+    .model-activity-ui .actions button { width: 100%; padding: 10px 9px; font-size: 13px; }
+    .model-activity-ui .panel {
+      padding: 12px; border: 1px solid #d1d5db; border-radius: 12px;
+      background: rgba(255,255,255,.96); box-shadow: 0 5px 16px rgba(0,0,0,.12);
+    }
+    .model-activity-ui .rock-panel { margin-top: 10px; }
+    .model-activity-ui .activities-heading { align-items: flex-start; gap: 6px; }
+    .model-activity-ui .activities-heading h2 { font-size: 15px; }
+    .model-activity-ui .group-activities-btn { padding: 7px 8px; font-size: 11px; }
+    .model-activity-ui .activities th,
+    .model-activity-ui .activities td { padding: 6px 3px; font-size: 10px; }
+    .model-activity-ui .activities th { font-size: 9px; }
+    .model-activity-ui .date-input { padding: 5px 2px; font-size: 9px; }
+    .model-activity-ui .delete-btn { width: 23px; height: 23px; font-size: 15px; }
     .model-filter-panel { margin: 0; width: 100%; box-shadow: 0 5px 16px rgba(0,0,0,.12); }
     .model-filter-stack { display: grid; gap: 8px; }
     .progress-panel { margin-top: 8px; box-shadow: 0 5px 16px rgba(0,0,0,.12); }
@@ -126,7 +146,7 @@
     .form-error { min-height: 20px; margin: -4px 0 12px; color: #b91c1c; font-size: 14px; font-weight: 700; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
     .secondary { background: #e5e7eb; color: #111; }
-    @media (max-width: 920px) { .app { width: min(100%, 720px); } .layout { grid-template-columns: 1fr; } }
+    @media (max-width: 920px) { .app { width: min(100%, 720px); } }
   </style>
 </head>
 <body>
@@ -189,32 +209,41 @@
                   </section>
                 </div>
               </foreignObject>
+
+              <foreignObject
+                id="modelActivityObject"
+                class="model-activity-object"
+                x="-153.79"
+                y="350"
+                width="240"
+                height="990"
+              >
+                <div xmlns="http://www.w3.org/1999/xhtml" class="model-filter-ui model-activity-ui">
+                  <div class="actions">
+                    <button id="openActivityButton" class="activity-btn" type="button">Registrar actividad</button>
+                  </div>
+                  <section class="panel" aria-live="polite">
+                    <div class="activities-heading">
+                      <h2>Actividades registradas</h2>
+                      <button id="groupActivitiesButton" class="group-activities-btn" type="button" disabled>Agrupar</button>
+                    </div>
+                    <p id="groupActivitiesMessage" class="group-activities-message"></p>
+                    <p id="activitiesEmpty" class="activities-empty">Todavía no hay actividades.</p>
+                    <div id="activitiesWrapper" class="table-wrap">
+                      <table class="activities">
+                        <thead><tr><th></th><th>Dir</th><th>Long</th><th>Fecha</th><th></th></tr></thead>
+                        <tbody id="activitiesBody"></tbody>
+                      </table>
+                    </div>
+                  </section>
+                </div>
+              </foreignObject>
             </svg>
           </div>
         </div>
         <div id="status"></div>
       </section>
 
-      <aside class="side">
-        <div class="actions">
-          <button id="resetButton" type="button">Reiniciar</button>
-          <button id="openActivityButton" class="activity-btn" type="button">Registrar actividad</button>
-        </div>
-        <section class="panel" aria-live="polite">
-          <div class="activities-heading">
-            <h2>Actividades registradas</h2>
-            <button id="groupActivitiesButton" class="group-activities-btn" type="button" disabled>Agrupar</button>
-          </div>
-          <p id="groupActivitiesMessage" class="group-activities-message"></p>
-          <p id="activitiesEmpty" class="activities-empty">Todavía no hay actividades.</p>
-          <div id="activitiesWrapper" class="table-wrap">
-            <table class="activities">
-              <thead><tr><th></th><th>Dir</th><th>Long</th><th>Fecha</th><th></th></tr></thead>
-              <tbody id="activitiesBody"></tbody>
-            </table>
-          </div>
-        </section>
-      </aside>
     </div>
   </main>
 
@@ -357,6 +386,7 @@
     const labelsGroup = document.getElementById("labelsGroup");
     const shortSegmentSelectorsGroup = document.getElementById("shortSegmentSelectorsGroup");
     const modelFiltersObject = document.getElementById("modelFiltersObject");
+    const modelActivityObject = document.getElementById("modelActivityObject");
     const status = document.getElementById("status");
     const resetButton = document.getElementById("resetButton");
     const labelsFilterCheckbox = document.getElementById("labelsFilterCheckbox");
@@ -410,7 +440,9 @@
     const MODEL_PANELS_DRAWING_GAP = 80;
     const leftmostNodeX = Math.min(...nodeDefs.map(node => node.x));
     const modelPanelsWidth = Number(modelFiltersObject.getAttribute('width'));
-    modelFiltersObject.setAttribute('x', (leftmostNodeX - MODEL_PANELS_DRAWING_GAP - modelPanelsWidth).toFixed(2));
+    const modelPanelsX = (leftmostNodeX - MODEL_PANELS_DRAWING_GAP - modelPanelsWidth).toFixed(2);
+    modelFiltersObject.setAttribute('x', modelPanelsX);
+    modelActivityObject.setAttribute('x', modelPanelsX);
     const MIN_VIEW_BOX_WIDTH = DIAGRAM_VIEW_BOX_WIDTH * 0.192;
     const MAX_VIEW_BOX_WIDTH = INITIAL_VIEW_BOX.width * 1.7;
     const activePointers = new Map();
@@ -1588,7 +1620,7 @@
     refreshNodeStates();
     renderActivities();
 
-    resetButton.addEventListener('click', () => {
+    resetButton?.addEventListener('click', () => {
       activities = [];
       selectedActivityIds.clear();
       setGroupActivitiesMessage();
@@ -1935,7 +1967,7 @@
   };
 
   // Ensure reset also clears rock zones.
-  resetButton.addEventListener('click', () => {
+  resetButton?.addEventListener('click', () => {
     rockZones = [];
     saveRockZones();
     renderRockZonesVisuals();
@@ -2311,7 +2343,7 @@
   labelsFilterCheckbox.addEventListener('change', saveAllFilterSettings);
   document.getElementById('rockZonesFilterCheckbox')?.addEventListener('change', saveAllFilterSettings);
 
-  resetButton.addEventListener('click', () => {
+  resetButton?.addEventListener('click', () => {
     comments = [];
     saveComments();
     renderComments();
