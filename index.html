@@ -6,6 +6,13 @@
   <meta name="theme-color" content="#ffffff" />
   <title>Visualización de red</title>
 <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+  <script>
+    try {
+      if (localStorage.getItem("redVerde_theme_v1") === "night") {
+        document.documentElement.dataset.theme = "night";
+      }
+    } catch {}
+  </script>
   <link rel="stylesheet" href="./version-manager.css?v=2" />
   <style>
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -41,6 +48,13 @@
     }
     .zoom-btn { min-width: 34px; min-height: 34px; padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: #111; font-size: 18px; line-height: 1; cursor: pointer; }
     .fit-btn { min-width: 62px; font-size: 12px; }
+    .theme-toggle-button {
+      flex: 0 0 auto; width: 42px; height: 42px; min-width: 42px; min-height: 42px;
+      padding: 0; border: 1px solid rgba(209,213,219,.95); border-radius: 11px;
+      background: rgba(255,255,255,.96); color: #111827;
+      box-shadow: 0 3px 12px rgba(0,0,0,.1);
+      font-size: 21px; line-height: 1; pointer-events: auto;
+    }
     .quick-actions {
       position: absolute; top: calc(100% + 7px); right: 0;
       display: flex; gap: 6px; pointer-events: auto;
@@ -191,12 +205,187 @@
     .form-error { min-height: 20px; margin: -4px 0 12px; color: #b91c1c; font-size: 14px; font-weight: 700; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
     .secondary { background: #e5e7eb; color: #111; }
+
+    html[data-theme="night"] {
+      color-scheme: dark;
+      background: #070b14;
+    }
+    html[data-theme="night"] body,
+    html[data-theme="night"] .app,
+    html[data-theme="night"] .network-shell,
+    html[data-theme="night"] .viewport,
+    html[data-theme="night"] svg {
+      background: #070b14;
+      color: #f8fafc;
+    }
+    html[data-theme="night"] .model-title,
+    html[data-theme="night"] .toolbar,
+    html[data-theme="night"] .zoom-btn,
+    html[data-theme="night"] .quick-action-btn,
+    html[data-theme="night"] .theme-toggle-button,
+    html[data-theme="night"] .version-library-toggle {
+      border-color: #475569;
+      background: rgba(15,23,42,.96);
+      color: #f8fafc;
+      box-shadow: 0 3px 14px rgba(0,0,0,.36);
+    }
+    html[data-theme="night"] .base-line { stroke: #f8fafc; }
+    html[data-theme="night"] .node { fill: #f8fafc; stroke: #0f172a; }
+    html[data-theme="night"] .node.active { fill: #22c55e; }
+    html[data-theme="night"] .camera-ring { stroke: #fb7185; }
+    html[data-theme="night"] .node-label {
+      fill: #f8fafc;
+      stroke: #070b14;
+    }
+    html[data-theme="night"] .node-label.terminal { fill: #e2e8f0; }
+    html[data-theme="night"] .distance-text {
+      fill: #cbd5e1;
+      stroke: #070b14;
+      opacity: .95;
+    }
+    html[data-theme="night"] .segment-guide { stroke: #94a3b8; }
+    html[data-theme="night"] .short-segment-leader,
+    html[data-theme="night"] .short-segment-pill { stroke: #cbd5e1; }
+    html[data-theme="night"] .short-segment-pill { fill: #0f172a; }
+    html[data-theme="night"] .short-segment-text { fill: #f8fafc; }
+    html[data-theme="night"] .short-segment-selector.active .short-segment-pill {
+      fill: #14532d;
+    }
+    html[data-theme="night"] .filter-panel,
+    html[data-theme="night"] .model-activity-ui .panel,
+    html[data-theme="night"] .modal {
+      border-color: #475569;
+      background: rgba(15,23,42,.97);
+      color: #f8fafc;
+      box-shadow: 0 6px 20px rgba(0,0,0,.34);
+    }
+    html[data-theme="night"] .filter-row,
+    html[data-theme="night"] .progress-row,
+    html[data-theme="night"] .activity-dir,
+    html[data-theme="night"] .modal-subtitle,
+    html[data-theme="night"] .form-field label,
+    html[data-theme="night"] .activity-length-hint {
+      color: #e2e8f0;
+    }
+    html[data-theme="night"] .progress-warning { color: #fbbf24; }
+    html[data-theme="night"] .activities-empty,
+    html[data-theme="night"] .rock-empty { color: #94a3b8; }
+    html[data-theme="night"] .table-wrap,
+    html[data-theme="night"] .activities,
+    html[data-theme="night"] .activities td {
+      border-color: #334155;
+      background: #0f172a;
+      color: #f8fafc;
+    }
+    html[data-theme="night"] .activities th {
+      border-color: #334155;
+      background: #1e293b;
+      color: #f8fafc;
+    }
+    html[data-theme="night"] .date-input,
+    html[data-theme="night"] .attr-table input,
+    html[data-theme="night"] .form-field input,
+    html[data-theme="night"] .comment-textarea {
+      border-color: #475569;
+      background: #0b1220;
+      color: #f8fafc;
+    }
+    html[data-theme="night"] .attr-table th,
+    html[data-theme="night"] .attr-table td {
+      border-color: #475569;
+      background: #1e293b;
+      color: #f8fafc;
+    }
+    html[data-theme="night"] .secondary,
+    html[data-theme="night"] .activities-toggle,
+    html[data-theme="night"] .rock-zone-chip {
+      border-color: #475569;
+      background: #334155;
+      color: #f8fafc;
+    }
+    html[data-theme="night"] .comment-btn.active {
+      border-color: #60a5fa;
+      background: #1e3a8a;
+      color: #dbeafe;
+    }
+    html[data-theme="night"] .comment-marker-bg {
+      fill: #0f172a;
+      stroke: #60a5fa;
+    }
+    html[data-theme="night"] .comment-marker-icon { fill: #93c5fd; }
+    html[data-theme="night"] .version-library {
+      background: #0b1220;
+      color: #f8fafc;
+    }
+    html[data-theme="night"] .version-library-header,
+    html[data-theme="night"] .version-card,
+    html[data-theme="night"] .version-overflow-menu,
+    html[data-theme="night"] .version-item {
+      border-color: #334155;
+      background: #0f172a;
+      color: #f8fafc;
+    }
+    html[data-theme="night"] .version-field input,
+    html[data-theme="night"] .version-field select,
+    html[data-theme="night"] .version-field textarea,
+    html[data-theme="night"] .version-more-button,
+    html[data-theme="night"] .version-library-close,
+    html[data-theme="night"] .version-section-heading button,
+    html[data-theme="night"] .version-item button {
+      border-color: #475569;
+      background: #1e293b;
+      color: #f8fafc;
+    }
+    html[data-theme="night"] .version-overflow-menu button,
+    html[data-theme="night"] .version-menu-import {
+      background: transparent;
+      color: #f8fafc;
+    }
+    html[data-theme="night"] .version-overflow-menu button:hover,
+    html[data-theme="night"] .version-overflow-menu button:focus-visible,
+    html[data-theme="night"] .version-menu-import:hover,
+    html[data-theme="night"] .version-menu-import:focus-within {
+      background: #1e293b;
+    }
+    html[data-theme="night"] .version-menu-separator { background: #334155; }
+    html[data-theme="night"] .version-current,
+    html[data-theme="night"] .version-field label,
+    html[data-theme="night"] .version-item-meta,
+    html[data-theme="night"] .version-item-note,
+    html[data-theme="night"] .version-sync-status {
+      color: #cbd5e1;
+    }
+    html[data-theme="night"] .version-item-title { color: #f8fafc; }
+    html[data-theme="night"] .version-item.active {
+      border-color: #22c55e;
+      background: #052e1b;
+    }
+    html[data-theme="night"] .version-item.active .version-open-button {
+      background: #14532d;
+      color: #dcfce7;
+    }
+    html[data-theme="night"] .version-item .version-delete-button,
+    html[data-theme="night"] .version-item.active .version-delete-button {
+      border-color: #7f1d1d;
+      background: #1f1318;
+      color: #fca5a5;
+    }
     @media (max-width: 420px) {
       .model-header { top: max(5px, env(safe-area-inset-top)); right: 5px; left: 5px; gap: 5px; }
-      .model-title { padding: 7px 8px; font-size: 16px; }
+      .model-title {
+        max-width: calc(100vw - 242px);
+        overflow: hidden;
+        padding: 7px 8px;
+        font-size: 16px;
+        text-overflow: ellipsis;
+      }
       .toolbar { gap: 3px; padding: 4px; }
       .zoom-btn { min-width: 32px; min-height: 32px; padding: 4px 6px; }
       .fit-btn { min-width: 57px; font-size: 11px; }
+      .theme-toggle-button {
+        width: 38px; height: 38px; min-width: 38px; min-height: 38px;
+        font-size: 19px;
+      }
       .quick-actions { top: calc(100% + 6px); gap: 5px; }
       .quick-action-btn { min-height: 32px; padding: 5px 8px; font-size: 11px; }
     }
@@ -209,6 +398,14 @@
         <div class="network-shell">
           <div id="networkViewport" class="viewport">
             <div class="model-header">
+              <button
+                id="themeToggleButton"
+                class="zoom-btn theme-toggle-button"
+                type="button"
+                aria-label="Activar modo nocturno"
+                aria-pressed="false"
+                title="Modo nocturno"
+              >☾</button>
               <h1 class="model-title">Visualización de red</h1>
               <div class="toolbar" aria-label="Controles del diagrama">
                 <button id="zoomOutButton" class="zoom-btn" type="button" aria-label="Alejar">−</button>
@@ -307,6 +504,35 @@
 
     </div>
   </main>
+
+  <script>
+    (() => {
+      const THEME_KEY = "redVerde_theme_v1";
+      const themeButton = document.getElementById("themeToggleButton");
+      const themeColor = document.querySelector('meta[name="theme-color"]');
+
+      function applyTheme(night, persist = true) {
+        document.documentElement.dataset.theme = night ? "night" : "day";
+        themeButton.textContent = night ? "☀" : "☾";
+        themeButton.setAttribute("aria-pressed", night ? "true" : "false");
+        themeButton.setAttribute(
+          "aria-label",
+          night ? "Activar modo claro" : "Activar modo nocturno"
+        );
+        themeButton.title = night ? "Modo claro" : "Modo nocturno";
+        themeColor?.setAttribute("content", night ? "#070b14" : "#ffffff");
+        if (!persist) return;
+        try {
+          localStorage.setItem(THEME_KEY, night ? "night" : "day");
+        } catch {}
+      }
+
+      applyTheme(document.documentElement.dataset.theme === "night", false);
+      themeButton.addEventListener("click", () => {
+        applyTheme(document.documentElement.dataset.theme !== "night");
+      });
+    })();
+  </script>
 
   <div id="attributeModal" class="backdrop" aria-hidden="true">
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="attrTitle">
