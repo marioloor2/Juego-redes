@@ -107,7 +107,11 @@
     const transaction = database.transaction(VERSIONS_STORE, "readonly");
     const index = transaction.objectStore(VERSIONS_STORE).index("modelId");
     const versions = await requestResult(index.getAll(IDBKeyRange.only(modelId)));
-    return versions.sort((a, b) => Number(b.versionNumber) - Number(a.versionNumber));
+    return versions
+      .filter(version => !version.deletedAt)
+      .sort((a, b) =>
+        String(b.savedAt || "").localeCompare(String(a.savedAt || "")) ||
+        Number(b.versionNumber) - Number(a.versionNumber));
   }
 
   async function putModel(model) {
@@ -235,18 +239,19 @@
       }
 
       activeModel = models.find(model => model.id === context.activeModelId) || models[0];
+      activeVersions = await getVersions(activeModel.id);
       let loadedVersion = context.loadedVersionId
         ? await getVersion(context.loadedVersionId)
         : null;
-      if (!loadedVersion || loadedVersion.modelId !== activeModel.id) {
-        loadedVersion = await getVersion(activeModel.currentVersionId);
+      if (!loadedVersion || loadedVersion.deletedAt || loadedVersion.modelId !== activeModel.id) {
+        loadedVersion = activeVersions.find(version =>
+          version.id === activeModel.currentVersionId) || activeVersions[0] || null;
       }
       context = {
         activeModelId: activeModel.id,
         loadedVersionId: loadedVersion?.id || null
       };
       writeJson(CONTEXT_KEY, context);
-      activeVersions = await getVersions(activeModel.id);
       updateModelTitle();
       await render();
       setFeedback();
@@ -448,6 +453,16 @@
     }
   }
 
+  function getDisplayVersionNumber(versionId) {
+    const index = activeVersions.findIndex(version => version.id === versionId);
+    return index >= 0 ? activeVersions.length - index : null;
+  }
+
+  function formatVersionLabel(versionId) {
+    const number = getDisplayVersionNumber(versionId);
+    return number ? `v${String(number).padStart(3, "0")}` : "—";
+  }
+
   function setFeedback(message = "", type = "") {
     clearTimeout(feedbackTimer);
     ui.feedback.textContent = message;
@@ -479,8 +494,7 @@
       ui.modelSelect.appendChild(option);
     });
 
-    const loaded = activeVersions.find(version => version.id === context.loadedVersionId);
-    ui.loadedVersionLabel.textContent = loaded ? `v${String(loaded.versionNumber).padStart(3, "0")}` : "—";
+    ui.loadedVersionLabel.textContent = formatVersionLabel(context.loadedVersionId);
     ui.versionsList.innerHTML = "";
 
     if (!activeVersions.length) {
@@ -491,13 +505,14 @@
     activeVersions.forEach(version => {
       const item = document.createElement("article");
       const isLoaded = version.id === context.loadedVersionId;
+      const versionLabel = formatVersionLabel(version.id);
       item.className = `version-item${isLoaded ? " active" : ""}`;
       const content = document.createElement("div");
       const title = document.createElement("p");
       const meta = document.createElement("p");
       title.className = "version-item-title";
       meta.className = "version-item-meta";
-      title.textContent = `v${String(version.versionNumber).padStart(3, "0")}`;
+      title.textContent = versionLabel;
       meta.textContent = formatDateTime(version.savedAt);
       content.append(title, meta);
       if (version.note) {
@@ -506,12 +521,26 @@
         note.textContent = version.note;
         content.appendChild(note);
       }
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = isLoaded ? "Abierta" : "Abrir";
-      button.disabled = isLoaded;
-      button.addEventListener("click", () => openVersion(version.id));
-      item.append(content, button);
+      const actions = document.createElement("div");
+      actions.className = "version-item-actions";
+      const openButton = document.createElement("button");
+      openButton.type = "button";
+      openButton.className = "version-open-button";
+      openButton.textContent = isLoaded ? "Abierta" : "Abrir";
+      openButton.disabled = isLoaded;
+      openButton.addEventListener("click", () => openVersion(version.id));
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "version-delete-button";
+      deleteButton.textContent = "×";
+      deleteButton.title = activeVersions.length > 1
+        ? `Eliminar ${versionLabel}`
+        : "El modelo debe conservar al menos una versión";
+      deleteButton.setAttribute("aria-label", deleteButton.title);
+      deleteButton.disabled = activeVersions.length <= 1;
+      deleteButton.addEventListener("click", () => deleteVersion(version.id));
+      actions.append(openButton, deleteButton);
+      item.append(content, actions);
       ui.versionsList.appendChild(item);
     });
   }
@@ -534,7 +563,7 @@
       ui.noteMenuButton.textContent = "Añadir comentario";
       await render();
       setFeedback(
-        `Guardado · v${String(result.version.versionNumber).padStart(3, "0")}`,
+        `Guardado · ${formatVersionLabel(result.version.id)}`,
         "success"
       );
       if (cloudProvider?.isSignedIn?.()) {
@@ -581,7 +610,7 @@
     try {
       if (!await confirmDiscardingUnsavedWork()) return;
       const version = await getVersion(versionId);
-      if (!version) throw new Error("Versión no encontrada.");
+      if (!version || version.deletedAt) throw new Error("Versión no encontrada.");
       const model = await getModel(version.modelId);
       applySnapshot(version.snapshot);
       context = {
@@ -596,6 +625,100 @@
     }
   }
 
+  async function markVersionAsDeleted(versionId) {
+    const transaction = database.transaction([MODELS_STORE, VERSIONS_STORE], "readwrite");
+    const modelsStore = transaction.objectStore(MODELS_STORE);
+    const versionsStore = transaction.objectStore(VERSIONS_STORE);
+    const version = await requestResult(versionsStore.get(versionId));
+    if (!version || version.deletedAt) {
+      transaction.abort();
+      throw new Error("Versión no encontrada.");
+    }
+    const model = await requestResult(modelsStore.get(version.modelId));
+    const allVersions = await requestResult(
+      versionsStore.index("modelId").getAll(IDBKeyRange.only(version.modelId))
+    );
+    const remaining = allVersions
+      .filter(item => item.id !== versionId && !item.deletedAt)
+      .sort((a, b) =>
+        String(b.savedAt || "").localeCompare(String(a.savedAt || "")) ||
+        Number(b.versionNumber) - Number(a.versionNumber));
+    if (!model || !remaining.length) {
+      transaction.abort();
+      throw new Error("El modelo debe conservar al menos una versión.");
+    }
+
+    const now = new Date().toISOString();
+    version.deletedAt = now;
+    version.updatedAt = now;
+    if (model.currentVersionId === versionId) {
+      model.currentVersionId = remaining[0].id;
+    }
+    model.updatedAt = now;
+    versionsStore.put(version);
+    modelsStore.put(model);
+    await transactionDone(transaction);
+    return { model, version, replacement: remaining[0] };
+  }
+
+  async function deleteVersion(versionId) {
+    if (activeVersions.length <= 1) {
+      setFeedback("El modelo debe conservar al menos una versión.", "error");
+      return;
+    }
+
+    const version = activeVersions.find(item => item.id === versionId);
+    if (!version) return;
+    const versionLabel = formatVersionLabel(versionId);
+    const isLoaded = versionId === context.loadedVersionId;
+    const hasUnsavedWork = isLoaded && await currentWorkDiffersFromLoaded();
+    const warning = [
+      `¿Eliminar ${versionLabel}?`,
+      "Las versiones posteriores cambiarán de número.",
+      isLoaded ? "Se abrirá la versión más reciente disponible." : "",
+      hasUnsavedWork ? "Los cambios que todavía no has guardado se perderán." : ""
+    ].filter(Boolean).join("\n\n");
+    if (!confirm(warning)) return;
+
+    try {
+      const result = await markVersionAsDeleted(versionId);
+      activeModel = result.model;
+      activeVersions = await getVersions(activeModel.id);
+
+      if (cloudProvider?.isSignedIn?.()) {
+        try {
+          await cloudProvider.pushVersion(clone(activeModel), clone(result.version));
+          setSyncStatus("En la nube", "ready");
+        } catch (cloudError) {
+          console.error(cloudError);
+          setSyncStatus("Pendiente de subir · Reintentar", "error", true);
+        }
+      } else {
+        setSyncStatus(
+          cloudProvider ? "Conectar con Google" : "Solo en este dispositivo",
+          "",
+          Boolean(cloudProvider)
+        );
+      }
+
+      if (isLoaded) {
+        const replacement = activeVersions.find(item =>
+          item.id === activeModel.currentVersionId) || activeVersions[0];
+        applySnapshot(replacement.snapshot);
+        context.loadedVersionId = replacement.id;
+        writeJson(CONTEXT_KEY, context);
+        location.reload();
+        return;
+      }
+
+      await render();
+      setFeedback(`${versionLabel} eliminada.`, "success");
+    } catch (error) {
+      console.error(error);
+      setFeedback("No se pudo eliminar la versión.", "error");
+    }
+  }
+
   async function switchModel(modelId) {
     if (!modelId || modelId === activeModel?.id) return;
     if (!await confirmDiscardingUnsavedWork()) {
@@ -603,7 +726,11 @@
       return;
     }
     const model = await getModel(modelId);
-    const version = model ? await getVersion(model.currentVersionId) : null;
+    let version = model ? await getVersion(model.currentVersionId) : null;
+    if (version?.deletedAt) version = null;
+    if (!version && model) {
+      version = (await getVersions(model.id))[0] || null;
+    }
     if (!model || !version) {
       setFeedback("El modelo no tiene una versión válida.", "error");
       return;
@@ -721,10 +848,14 @@
       const model = data.models.find(item => item.id === importedContext.activeModelId) ||
         data.models[0];
       const version = data.versions.find(item =>
-        item.id === importedContext.loadedVersionId && item.modelId === model.id) ||
+        !item.deletedAt &&
+        item.id === importedContext.loadedVersionId &&
+        item.modelId === model.id) ||
         data.versions
-          .filter(item => item.modelId === model.id)
-          .sort((a, b) => Number(b.versionNumber) - Number(a.versionNumber))[0];
+          .filter(item => item.modelId === model.id && !item.deletedAt)
+          .sort((a, b) =>
+            String(b.savedAt || "").localeCompare(String(a.savedAt || "")) ||
+            Number(b.versionNumber) - Number(a.versionNumber))[0];
       if (!version) throw new Error("La copia no contiene una versión utilizable.");
       applySnapshot(version.snapshot);
       writeJson(CONTEXT_KEY, {
@@ -742,7 +873,7 @@
     if (!remote || !Array.isArray(remote.models) || !Array.isArray(remote.versions)) return;
     const local = await getWorkspaceData();
     const localModelMap = new Map(local.models.map(model => [model.id, model]));
-    const localVersionIds = new Set(local.versions.map(version => version.id));
+    const localVersionMap = new Map(local.versions.map(version => [version.id, version]));
     const transaction = database.transaction([MODELS_STORE, VERSIONS_STORE], "readwrite");
     const modelsStore = transaction.objectStore(MODELS_STORE);
     const versionsStore = transaction.objectStore(VERSIONS_STORE);
@@ -754,7 +885,17 @@
       }
     });
     remote.versions.forEach(version => {
-      if (!localVersionIds.has(version.id)) versionsStore.add(version);
+      const existing = localVersionMap.get(version.id);
+      if (!existing) {
+        versionsStore.add(version);
+        return;
+      }
+      if (
+        version.deletedAt &&
+        (!existing.deletedAt || String(version.deletedAt) > String(existing.deletedAt))
+      ) {
+        versionsStore.put(version);
+      }
     });
     await transactionDone(transaction);
   }
@@ -778,9 +919,10 @@
       if (!silent) setFeedback("Actualizado en la nube.", "success");
       activeModel = await getModel(context.activeModelId);
       activeVersions = await getVersions(context.activeModelId);
-      const latestVersion = activeModel?.currentVersionId
+      let latestVersion = activeModel?.currentVersionId
         ? await getVersion(activeModel.currentVersionId)
         : null;
+      if (latestVersion?.deletedAt) latestVersion = activeVersions[0] || null;
       if (latestVersion && latestVersion.id !== context.loadedVersionId) {
         if (!await currentWorkDiffersFromLoaded()) {
           applySnapshot(latestVersion.snapshot);

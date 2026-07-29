@@ -388,6 +388,12 @@
   white-space: nowrap;
 }
 
+.version-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
 .version-item button {
   min-width: 58px;
   padding: 8px 9px;
@@ -399,6 +405,24 @@
 .version-item.active button {
   background: #dcfce7;
   color: #166534;
+}
+
+.version-item .version-delete-button,
+.version-item.active .version-delete-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #fecaca;
+  background: #fff;
+  color: #dc2626;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.version-item .version-delete-button:disabled {
+  border-color: #e2e8f0;
+  color: #94a3b8;
 }
 
 .version-feedback {
