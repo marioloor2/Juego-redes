@@ -24,6 +24,7 @@
   let activeModel = null;
   let activeVersions = [];
   let context = readJson(CONTEXT_KEY, {});
+  let feedbackTimer = null;
 
   const ui = buildInterface();
   wireInterface();
@@ -169,7 +170,6 @@
       modelId: model.id,
       versionNumber: 1,
       savedAt: now,
-      cutoffDate: today(),
       note,
       parentVersionId: null,
       schemaVersion: SNAPSHOT_SCHEMA_VERSION,
@@ -202,7 +202,6 @@
       modelId,
       versionNumber: Number(model.nextVersionNumber) || 1,
       savedAt: now,
-      cutoffDate: metadata.cutoffDate || today(),
       note: String(metadata.note || "").trim(),
       parentVersionId: context.loadedVersionId || model.currentVersionId || null,
       schemaVersion: SNAPSHOT_SCHEMA_VERSION,
@@ -250,7 +249,7 @@
       activeVersions = await getVersions(activeModel.id);
       updateModelTitle();
       await render();
-      setFeedback("Biblioteca local preparada.", "success");
+      setFeedback();
     } catch (error) {
       console.error(error);
       setFeedback("No se pudo iniciar la biblioteca de versiones.", "error");
@@ -278,56 +277,63 @@
       <header class="version-library-header">
         <div>
           <p class="version-library-kicker">Biblioteca</p>
-          <h2 class="version-library-title">Modelos y versiones</h2>
+          <h2 class="version-library-title">Modelos</h2>
         </div>
         <button class="version-library-close" type="button" aria-label="Cerrar">×</button>
       </header>
       <div class="version-library-content">
-        <section class="version-card">
-          <h3 class="version-card-title">Modelo activo</h3>
-          <div class="version-field">
-            <label for="versionModelSelect">Modelo</label>
-            <select id="versionModelSelect"></select>
+        <section class="version-card version-main-card">
+          <div class="version-model-row">
+            <div class="version-field">
+              <label for="versionModelSelect">Modelo</label>
+              <select id="versionModelSelect"></select>
+            </div>
+            <div class="version-overflow">
+              <button
+                id="moreActionsButton"
+                class="version-more-button"
+                type="button"
+                aria-label="Más opciones"
+                aria-haspopup="menu"
+                aria-expanded="false"
+              >⋯</button>
+              <div id="moreActionsMenu" class="version-overflow-menu" role="menu" hidden>
+                <button id="renameModelButton" type="button" role="menuitem">Renombrar modelo</button>
+                <button id="duplicateModelButton" type="button" role="menuitem">Duplicar modelo</button>
+                <div class="version-menu-separator"></div>
+                <button id="addNoteButton" type="button" role="menuitem">Añadir comentario</button>
+                <button id="showHistoryButton" type="button" role="menuitem">Ver historial</button>
+                <div class="version-menu-separator"></div>
+                <button id="exportWorkspaceButton" type="button" role="menuitem">Exportar respaldo</button>
+                <label class="version-menu-import" role="menuitem">
+                  Importar respaldo
+                  <input id="importWorkspaceInput" type="file" accept="application/json,.json" />
+                </label>
+              </div>
+            </div>
           </div>
-          <div class="version-secondary-actions">
-            <button id="duplicateModelButton" type="button">Duplicar modelo</button>
-            <button id="renameModelButton" type="button">Renombrar</button>
-          </div>
-        </section>
-
-        <section class="version-card">
-          <h3 class="version-card-title">Guardar una versión nueva</h3>
-          <p class="version-current">Versión abierta: <strong id="loadedVersionLabel">—</strong></p>
-          <div class="version-field">
-            <label for="versionCutoffDate">Fecha de corte</label>
-            <input id="versionCutoffDate" type="date" />
-          </div>
-          <div class="version-field">
-            <label for="versionNote">Descripción opcional</label>
-            <textarea id="versionNote" maxlength="300" placeholder="Ej.: Actualización después de inspección"></textarea>
+          <p class="version-current">Versión actual <strong id="loadedVersionLabel">—</strong></p>
+          <div id="versionNotePanel" class="version-optional-panel" hidden>
+            <div class="version-field">
+              <label for="versionNote">Comentario</label>
+              <textarea id="versionNote" maxlength="300" placeholder="¿Qué cambió en esta versión?"></textarea>
+            </div>
           </div>
           <button id="saveNewVersionButton" class="version-primary-action" type="button">
-            Guardar nueva versión
+            Guardar
           </button>
           <p id="versionFeedback" class="version-feedback" aria-live="polite"></p>
-          <p id="versionSyncStatus" class="version-sync-status">
+          <button id="cloudConnectionButton" class="version-sync-status" type="button" disabled>
             <span class="version-sync-dot"></span>
-            <span>Guardado local activo; Firebase pendiente de configurar.</span>
-          </p>
-          <div class="version-secondary-actions">
-            <button id="syncCloudButton" type="button">Sincronizar</button>
-            <button id="exportWorkspaceButton" type="button">Exportar copia</button>
-          </div>
-          <div class="version-secondary-actions">
-            <label class="version-import-label">
-              Importar copia
-              <input id="importWorkspaceInput" type="file" accept="application/json,.json" />
-            </label>
-          </div>
+            <span>Solo en este dispositivo</span>
+          </button>
         </section>
 
-        <section class="version-card">
-          <h3 class="version-card-title">Historial</h3>
+        <section id="versionHistoryPanel" class="version-card version-history-panel" hidden>
+          <div class="version-section-heading">
+            <h3 class="version-card-title">Historial</h3>
+            <button id="closeHistoryButton" type="button" aria-label="Cerrar historial">×</button>
+          </div>
           <div id="versionsList" class="version-list"></div>
         </section>
       </div>
@@ -342,14 +348,19 @@
       panel,
       close: panel.querySelector(".version-library-close"),
       modelSelect: panel.querySelector("#versionModelSelect"),
+      moreButton: panel.querySelector("#moreActionsButton"),
+      moreMenu: panel.querySelector("#moreActionsMenu"),
       duplicateButton: panel.querySelector("#duplicateModelButton"),
       renameButton: panel.querySelector("#renameModelButton"),
-      cutoffDate: panel.querySelector("#versionCutoffDate"),
+      noteMenuButton: panel.querySelector("#addNoteButton"),
+      notePanel: panel.querySelector("#versionNotePanel"),
       note: panel.querySelector("#versionNote"),
+      historyMenuButton: panel.querySelector("#showHistoryButton"),
+      historyPanel: panel.querySelector("#versionHistoryPanel"),
+      closeHistoryButton: panel.querySelector("#closeHistoryButton"),
       saveButton: panel.querySelector("#saveNewVersionButton"),
       feedback: panel.querySelector("#versionFeedback"),
-      syncStatus: panel.querySelector("#versionSyncStatus"),
-      syncButton: panel.querySelector("#syncCloudButton"),
+      cloudButton: panel.querySelector("#cloudConnectionButton"),
       exportButton: panel.querySelector("#exportWorkspaceButton"),
       importInput: panel.querySelector("#importWorkspaceInput"),
       loadedVersionLabel: panel.querySelector("#loadedVersionLabel"),
@@ -362,25 +373,62 @@
     ui.close.addEventListener("click", () => setPanelOpen(false));
     ui.backdrop.addEventListener("click", () => setPanelOpen(false));
     ui.saveButton.addEventListener("click", saveNewVersion);
-    ui.duplicateButton.addEventListener("click", duplicateActiveModel);
-    ui.renameButton.addEventListener("click", renameActiveModel);
-    ui.exportButton.addEventListener("click", exportWorkspace);
+    ui.moreButton.addEventListener("click", event => {
+      event.stopPropagation();
+      setOverflowOpen(ui.moreMenu.hidden);
+    });
+    ui.duplicateButton.addEventListener("click", () => runMenuAction(duplicateActiveModel));
+    ui.renameButton.addEventListener("click", () => runMenuAction(renameActiveModel));
+    ui.noteMenuButton.addEventListener("click", () => {
+      setOverflowOpen(false);
+      ui.notePanel.hidden = !ui.notePanel.hidden;
+      ui.noteMenuButton.textContent = ui.notePanel.hidden
+        ? "Añadir comentario"
+        : "Ocultar comentario";
+      if (!ui.notePanel.hidden) ui.note.focus();
+    });
+    ui.historyMenuButton.addEventListener("click", () => {
+      setOverflowOpen(false);
+      setHistoryOpen(ui.historyPanel.hidden);
+    });
+    ui.closeHistoryButton.addEventListener("click", () => setHistoryOpen(false));
+    ui.exportButton.addEventListener("click", () => runMenuAction(exportWorkspace));
     ui.importInput.addEventListener("change", importWorkspace);
-    ui.syncButton.addEventListener("click", () => synchronizeCloud(false));
+    ui.cloudButton.addEventListener("click", () => synchronizeCloud(false));
     ui.modelSelect.addEventListener("change", () => switchModel(ui.modelSelect.value));
+    document.addEventListener("click", event => {
+      if (!event.target.closest(".version-overflow")) setOverflowOpen(false);
+    });
     document.addEventListener("keydown", event => {
       if (event.key === "Escape" && ui.panel.classList.contains("open")) {
-        setPanelOpen(false);
+        if (!ui.moreMenu.hidden) setOverflowOpen(false);
+        else setPanelOpen(false);
       }
     });
-    ui.cutoffDate.value = today();
   }
 
   function setPanelOpen(open) {
+    if (!open) setOverflowOpen(false);
     ui.panel.classList.toggle("open", open);
     ui.backdrop.classList.toggle("open", open);
     ui.panel.setAttribute("aria-hidden", open ? "false" : "true");
     ui.toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function setOverflowOpen(open) {
+    ui.moreMenu.hidden = !open;
+    ui.moreButton.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function runMenuAction(action) {
+    setOverflowOpen(false);
+    return action();
+  }
+
+  function setHistoryOpen(open) {
+    ui.historyPanel.hidden = !open;
+    ui.historyMenuButton.textContent = open ? "Ocultar historial" : "Ver historial";
+    if (open) ui.historyPanel.scrollIntoView({ block: "nearest" });
   }
 
   function today() {
@@ -401,13 +449,18 @@
   }
 
   function setFeedback(message = "", type = "") {
+    clearTimeout(feedbackTimer);
     ui.feedback.textContent = message;
     ui.feedback.className = `version-feedback${type ? ` ${type}` : ""}`;
+    if (message && type) {
+      feedbackTimer = setTimeout(() => setFeedback(), type === "error" ? 5000 : 3000);
+    }
   }
 
-  function setSyncStatus(message, type = "") {
-    ui.syncStatus.className = `version-sync-status${type ? ` ${type}` : ""}`;
-    ui.syncStatus.lastElementChild.textContent = message;
+  function setSyncStatus(message, type = "", actionable = false) {
+    ui.cloudButton.className = `version-sync-status${type ? ` ${type}` : ""}${actionable ? " actionable" : ""}`;
+    ui.cloudButton.lastElementChild.textContent = message;
+    ui.cloudButton.disabled = !actionable;
   }
 
   function updateModelTitle() {
@@ -444,7 +497,7 @@
       const meta = document.createElement("p");
       title.className = "version-item-title";
       meta.className = "version-item-meta";
-      title.textContent = `v${String(version.versionNumber).padStart(3, "0")} · corte ${version.cutoffDate || "sin fecha"}`;
+      title.textContent = `v${String(version.versionNumber).padStart(3, "0")}`;
       meta.textContent = formatDateTime(version.savedAt);
       content.append(title, meta);
       if (version.note) {
@@ -466,10 +519,10 @@
   async function saveNewVersion() {
     if (!activeModel || ui.saveButton.disabled) return;
     ui.saveButton.disabled = true;
+    ui.saveButton.textContent = "Guardando…";
     setFeedback("Guardando…");
     try {
       const result = await createVersion(activeModel.id, captureSnapshot(), {
-        cutoffDate: ui.cutoffDate.value,
         note: ui.note.value
       });
       activeModel = result.model;
@@ -477,30 +530,34 @@
       writeJson(CONTEXT_KEY, context);
       activeVersions = await getVersions(activeModel.id);
       ui.note.value = "";
+      ui.notePanel.hidden = true;
+      ui.noteMenuButton.textContent = "Añadir comentario";
       await render();
       setFeedback(
-        `Versión v${String(result.version.versionNumber).padStart(3, "0")} guardada.`,
+        `Guardado · v${String(result.version.versionNumber).padStart(3, "0")}`,
         "success"
       );
       if (cloudProvider?.isSignedIn?.()) {
         try {
           await cloudProvider.pushVersion(clone(activeModel), clone(result.version));
-          setSyncStatus("Versión guardada también en la nube.", "ready");
+          setSyncStatus("En la nube", "ready");
         } catch (cloudError) {
           console.error(cloudError);
-          setSyncStatus(
-            "La versión quedó guardada localmente y está pendiente de subir.",
-            "error"
-          );
+          setSyncStatus("Pendiente de subir · Reintentar", "error", true);
         }
       } else {
-        setSyncStatus("Versión guardada localmente; nube pendiente.", "");
+        setSyncStatus(
+          cloudProvider ? "Conectar con Google" : "Solo en este dispositivo",
+          "",
+          Boolean(cloudProvider)
+        );
       }
     } catch (error) {
       console.error(error);
       setFeedback("No se pudo guardar la nueva versión.", "error");
     } finally {
       ui.saveButton.disabled = false;
+      ui.saveButton.textContent = "Guardar";
     }
   }
 
@@ -647,6 +704,7 @@
   }
 
   async function importWorkspace(event) {
+    setOverflowOpen(false);
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
@@ -704,21 +762,20 @@
   async function synchronizeCloud(silent = false) {
     if (cloudSyncInProgress) return;
     if (!cloudProvider) {
-      setSyncStatus("Firebase aún no está configurado.", "error");
-      if (!silent) setFeedback("Falta conectar el proyecto gratuito de Firebase.", "error");
+      setSyncStatus("Solo en este dispositivo");
+      if (!silent) setFeedback("La nube todavía no está disponible.", "error");
       return;
     }
     cloudSyncInProgress = true;
-    ui.syncButton.disabled = true;
-    setSyncStatus("Sincronizando…");
+    setSyncStatus("Actualizando…");
     try {
       if (!cloudProvider.isSignedIn()) await cloudProvider.signIn();
       const remote = await cloudProvider.pullWorkspace();
       await mergeWorkspace(remote);
       const merged = await getWorkspaceData();
       await cloudProvider.pushWorkspace(merged);
-      setSyncStatus(`Sincronizado como ${cloudProvider.getUserLabel()}.`, "ready");
-      if (!silent) setFeedback("Biblioteca sincronizada.", "success");
+      setSyncStatus("En la nube", "ready");
+      if (!silent) setFeedback("Actualizado en la nube.", "success");
       activeModel = await getModel(context.activeModelId);
       activeVersions = await getVersions(context.activeModelId);
       const latestVersion = activeModel?.currentVersionId
@@ -740,11 +797,10 @@
       await render();
     } catch (error) {
       console.error(error);
-      setSyncStatus("No se pudo completar la sincronización.", "error");
-      setFeedback("Revisa la conexión o el inicio de sesión.", "error");
+      setSyncStatus("Sin conexión · Reintentar", "error", true);
+      if (!silent) setFeedback("No se pudo conectar con la nube.", "error");
     } finally {
       cloudSyncInProgress = false;
-      ui.syncButton.disabled = false;
     }
   }
 
@@ -752,9 +808,10 @@
     cloudProvider = provider;
     setSyncStatus(
       provider.isSignedIn()
-        ? `Conectado como ${provider.getUserLabel()}.`
-        : "Firebase preparado; inicia sesión para sincronizar.",
-      provider.isSignedIn() ? "ready" : ""
+        ? "En la nube"
+        : "Conectar con Google",
+      provider.isSignedIn() ? "ready" : "",
+      !provider.isSignedIn()
     );
   }
 
