@@ -41,6 +41,17 @@
     }
     .zoom-btn { min-width: 34px; min-height: 34px; padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: #111; font-size: 18px; line-height: 1; cursor: pointer; }
     .fit-btn { min-width: 62px; font-size: 12px; }
+    .quick-actions {
+      position: absolute; top: calc(100% + 7px); right: 0;
+      display: flex; gap: 6px; pointer-events: auto;
+    }
+    .quick-action-btn {
+      min-width: 0; min-height: 34px; padding: 6px 10px;
+      border: 1px solid rgba(209,213,219,.95); border-radius: 8px;
+      background: rgba(255,255,255,.96); color: #111827;
+      box-shadow: 0 3px 12px rgba(0,0,0,.1);
+      font-size: 12px; line-height: 1; white-space: nowrap;
+    }
     .viewport { position: relative; overflow: hidden; width: 100%; height: 100%; background: #fafafa; touch-action: none; cursor: grab; }
     .viewport.panning { cursor: grabbing; }
     svg { display: block; width: 100%; height: 100%; min-height: 0; background: #fafafa; user-select: none; touch-action: none; }
@@ -125,14 +136,31 @@
     button:disabled { cursor: not-allowed; opacity: .45; }
     .activity-btn { background: #16a34a; }
     .panel h2 { margin: 0 0 10px; font-size: 18px; }
-    .activities-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+    .activities-heading {
+      position: relative; display: grid; grid-template-columns: minmax(0,1fr) auto;
+      align-items: start; gap: 8px; margin-bottom: 8px;
+    }
     .activities-heading h2 { margin: 0; }
-    .group-activities-btn { flex: 0 0 auto; padding: 8px 12px; border-radius: 9px; background: #2563eb; font-size: 13px; }
+    .group-activities-btn {
+      position: static; align-self: start; justify-self: end;
+      padding: 8px 12px; border-radius: 9px; background: #2563eb; font-size: 13px;
+    }
     .group-activities-message { min-height: 18px; margin: 0 0 7px; color: #4b5563; font-size: 12px; line-height: 1.35; }
     .group-activities-message.error { color: #b91c1c; font-weight: 700; }
     .group-activities-message.success { color: #15803d; font-weight: 700; }
     .activities-empty { margin: 0; padding: 16px 10px; color: #6b7280; text-align: center; font-size: 14px; }
     .table-wrap { overflow-x: auto; border: 1px solid #d1d5db; border-radius: 12px; background: #fff; }
+    .table-wrap.activities-expanded {
+      max-height: 330px; overflow-y: auto; overscroll-behavior: contain;
+      touch-action: pan-y; -webkit-overflow-scrolling: touch;
+    }
+    .table-wrap.activities-expanded thead { position: sticky; z-index: 1; top: 0; }
+    .activities-toggle {
+      display: block; margin: 8px auto 0; padding: 5px 9px;
+      border: 1px solid #cbd5e1; border-radius: 8px;
+      background: #fff; color: #334155; font-size: 11px; line-height: 1.2;
+    }
+    .activities-toggle[hidden] { display: none; }
     .activities { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; background: #fff; }
     .activities th, .activities td { padding: 8px 6px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 13px; vertical-align: middle; }
     .activities th { background: #f3f4f6; font-size: 12px; text-transform: uppercase; letter-spacing: .02em; }
@@ -171,6 +199,8 @@
       .toolbar { gap: 3px; padding: 4px; }
       .zoom-btn { min-width: 32px; min-height: 32px; padding: 4px 6px; }
       .fit-btn { min-width: 57px; font-size: 11px; }
+      .quick-actions { top: calc(100% + 6px); gap: 5px; }
+      .quick-action-btn { min-height: 32px; padding: 5px 8px; font-size: 11px; }
     }
   </style>
 </head>
@@ -186,6 +216,10 @@
                 <button id="zoomOutButton" class="zoom-btn" type="button" aria-label="Alejar">−</button>
                 <button id="fitViewButton" class="zoom-btn fit-btn" type="button">Centrar</button>
                 <button id="zoomInButton" class="zoom-btn" type="button" aria-label="Acercar">+</button>
+              </div>
+              <div class="quick-actions" aria-label="Registrar información">
+                <button id="openActivityButton" class="zoom-btn quick-action-btn" type="button" aria-label="Registrar actividad">Actividad</button>
+                <button id="toggleCommentModeButton" class="zoom-btn quick-action-btn comment-btn" type="button" aria-label="Registrar comentario" aria-pressed="false">Comentario</button>
               </div>
             </div>
             <svg id="networkSvg" viewBox="-175 34.53 1157.19 1370.95" preserveAspectRatio="xMidYMid meet" aria-label="Red esquemática desde AutoCAD">
@@ -243,9 +277,7 @@
                 height="990"
               >
                 <div xmlns="http://www.w3.org/1999/xhtml" class="model-filter-ui model-activity-ui">
-                  <div class="actions">
-                    <button id="openActivityButton" class="activity-btn" type="button">Registrar actividad</button>
-                  </div>
+                  <div class="actions"></div>
                   <section class="panel" aria-live="polite">
                     <div class="activities-heading">
                       <h2>Actividades registradas</h2>
@@ -259,6 +291,7 @@
                         <tbody id="activitiesBody"></tbody>
                       </table>
                     </div>
+                    <button id="toggleAllActivitiesButton" class="activities-toggle" type="button" hidden>Ver todas</button>
                   </section>
                 </div>
               </foreignObject>
@@ -461,6 +494,7 @@
     const activitiesEmpty = document.getElementById("activitiesEmpty");
     const activitiesWrapper = document.getElementById("activitiesWrapper");
     const activitiesBody = document.getElementById("activitiesBody");
+    const toggleAllActivitiesButton = document.getElementById("toggleAllActivitiesButton");
     const groupActivitiesButton = document.getElementById("groupActivitiesButton");
     const groupActivitiesMessage = document.getElementById("groupActivitiesMessage");
     const collectorProgressText = document.getElementById("collectorProgressText");
@@ -471,6 +505,7 @@
     const validCameras = nodeDefs.filter(n => n.main).map(n => n.id);
     const lineStates = new Map();
     let activities = [];
+    let showAllActivities = false;
     const selectedActivityIds = new Set();
     let selectedLineId = null;
     let selectedNodeId = null;
@@ -1327,14 +1362,29 @@
 
     function renderActivities() {
       activitiesBody.innerHTML = '';
+      if (activities.length <= 5) showAllActivities = false;
+      const displayedActivities = showAllActivities ? activities : activities.slice(-5);
+      const displayedActivityIds = new Set(displayedActivities.map(activity => activity.id));
       selectedActivityIds.forEach(id => {
         const activity = activities.find(item => item.id === id);
-        if (!activity || activity.source !== 'manual') selectedActivityIds.delete(id);
+        if (
+          !activity ||
+          activity.source !== 'manual' ||
+          (!showAllActivities && !displayedActivityIds.has(id))
+        ) {
+          selectedActivityIds.delete(id);
+        }
       });
       const has = activities.length > 0;
       activitiesEmpty.style.display = has ? 'none' : 'block';
       activitiesWrapper.style.display = has ? 'block' : 'none';
-      activities.forEach(activity => {
+      activitiesWrapper.classList.toggle('activities-expanded', showAllActivities && activities.length > 5);
+      toggleAllActivitiesButton.hidden = activities.length <= 5;
+      toggleAllActivitiesButton.textContent = showAllActivities
+        ? 'Ver últimas 5'
+        : `Ver todas (${activities.length})`;
+      toggleAllActivitiesButton.setAttribute('aria-expanded', showAllActivities ? 'true' : 'false');
+      displayedActivities.forEach(activity => {
         const row = document.createElement('tr');
         const selectCell = document.createElement('td');
         if (activity.source === 'manual') {
@@ -1715,6 +1765,13 @@
     });
     openActivityButton.addEventListener('click', openActivityModal);
     groupActivitiesButton.addEventListener('click', groupSelectedActivities);
+    toggleAllActivitiesButton.addEventListener('click', () => {
+      showAllActivities = !showAllActivities;
+      selectedActivityIds.clear();
+      setGroupActivitiesMessage();
+      renderActivities();
+      activitiesWrapper.scrollTop = 0;
+    });
     cancelActivityButton.addEventListener('click', closeActivityModal);
     activityFullLengthCheckbox.addEventListener('change', updateFullLengthOption);
     startCameraInput.addEventListener('input', () => {
@@ -2058,8 +2115,10 @@
 </script>
 
 <style>
-  .comment-btn { flex-basis: 100% !important; background: #2563eb; }
-  .comment-btn.active { background: #1d4ed8; box-shadow: 0 0 0 3px rgba(37,99,235,.22); }
+  .comment-btn.active {
+    border-color: #2563eb; background: #eff6ff; color: #1d4ed8;
+    box-shadow: 0 0 0 2px rgba(37,99,235,.16);
+  }
   .viewport.comment-placement-mode,
   .viewport.comment-placement-mode svg,
   .viewport.comment-placement-mode svg * { cursor: crosshair !important; }
@@ -2102,14 +2161,7 @@
 <script>
 (function() {
   const COMMENTS_KEY = 'redVerde_autocad_comments_v1';
-  const actionsBox = document.querySelector('.actions');
-  const commentButton = document.createElement('button');
-  commentButton.id = 'toggleCommentModeButton';
-  commentButton.type = 'button';
-  commentButton.className = 'comment-btn';
-  commentButton.textContent = 'Registrar comentario';
-  commentButton.setAttribute('aria-pressed', 'false');
-  actionsBox.appendChild(commentButton);
+  const commentButton = document.getElementById('toggleCommentModeButton');
 
   const filtersStack = document.querySelector('.model-filter-stack');
   const commentFilterLabel = document.createElement('label');
@@ -2280,7 +2332,7 @@
     commentPlacementMode = Boolean(active);
     commentButton.classList.toggle('active', commentPlacementMode);
     commentButton.setAttribute('aria-pressed', commentPlacementMode ? 'true' : 'false');
-    commentButton.textContent = commentPlacementMode ? 'Selecciona un punto…' : 'Registrar comentario';
+    commentButton.textContent = commentPlacementMode ? 'Cancelar' : 'Comentario';
     viewport.classList.toggle('comment-placement-mode', commentPlacementMode);
     if (!commentPlacementMode) commentCursor.style.display = 'none';
     if (commentPlacementMode) {
