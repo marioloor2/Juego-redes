@@ -142,9 +142,12 @@
     }
     .activities-heading h2 { margin: 0; }
     .group-activities-btn {
-      position: static; align-self: start; justify-self: end;
+      position: static; display: inline-flex; align-self: start; justify-self: end;
+      align-items: center; justify-content: center;
       padding: 8px 12px; border-radius: 9px; background: #2563eb; font-size: 13px;
+      color: #fff; font-weight: 700; line-height: 1; cursor: pointer; user-select: none;
     }
+    .group-activities-btn.is-disabled { cursor: not-allowed; opacity: .45; }
     .group-activities-message { min-height: 18px; margin: 0 0 7px; color: #4b5563; font-size: 12px; line-height: 1.35; }
     .group-activities-message.error { color: #b91c1c; font-weight: 700; }
     .group-activities-message.success { color: #15803d; font-weight: 700; }
@@ -281,7 +284,13 @@
                   <section class="panel" aria-live="polite">
                     <div class="activities-heading">
                       <h2>Actividades registradas</h2>
-                      <button id="groupActivitiesButton" class="group-activities-btn" type="button" disabled>Agrupar</button>
+                      <span
+                        id="groupActivitiesButton"
+                        class="group-activities-btn is-disabled"
+                        role="button"
+                        tabindex="0"
+                        aria-disabled="true"
+                      >Agrupar</span>
                     </div>
                     <p id="groupActivitiesMessage" class="group-activities-message"></p>
                     <p id="activitiesEmpty" class="activities-empty">Todavía no hay actividades.</p>
@@ -1295,7 +1304,9 @@
       const selectedManualCount = activities.filter(activity =>
         activity.source === 'manual' && selectedActivityIds.has(activity.id)
       ).length;
-      groupActivitiesButton.disabled = selectedManualCount < 2;
+      const disabled = selectedManualCount < 2;
+      groupActivitiesButton.classList.toggle('is-disabled', disabled);
+      groupActivitiesButton.setAttribute('aria-disabled', disabled ? 'true' : 'false');
     }
 
     function groupSelectedActivities() {
@@ -1765,6 +1776,11 @@
     });
     openActivityButton.addEventListener('click', openActivityModal);
     groupActivitiesButton.addEventListener('click', groupSelectedActivities);
+    groupActivitiesButton.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      groupSelectedActivities();
+    });
     toggleAllActivitiesButton.addEventListener('click', () => {
       showAllActivities = !showAllActivities;
       selectedActivityIds.clear();
