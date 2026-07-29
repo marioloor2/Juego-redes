@@ -114,9 +114,8 @@
       background: rgba(255,255,255,.96); box-shadow: 0 5px 16px rgba(0,0,0,.12);
     }
     .model-activity-ui .rock-panel { margin-top: 10px; }
-    .model-activity-ui .activities-heading { align-items: flex-start; gap: 6px; }
-    .model-activity-ui .activities-heading h2 { font-size: 15px; }
-    .model-activity-ui .group-activities-btn { padding: 7px 8px; font-size: 11px; }
+    .model-activity-ui .panel .activities-heading { font-size: 15px; }
+    .model-activity-ui .group-activities-btn { font-size: 10px; }
     .model-activity-ui .activities th,
     .model-activity-ui .activities td { padding: 6px 3px; font-size: 10px; }
     .model-activity-ui .activities th { font-size: 9px; }
@@ -136,18 +135,14 @@
     button:disabled { cursor: not-allowed; opacity: .45; }
     .activity-btn { background: #16a34a; }
     .panel h2 { margin: 0 0 10px; font-size: 18px; }
-    .activities-heading {
-      position: relative; display: grid; grid-template-columns: minmax(0,1fr) auto;
-      align-items: start; gap: 8px; margin-bottom: 8px;
-    }
-    .activities-heading h2 { margin: 0; }
+    .panel .activities-heading { margin: 0 0 8px; }
     .group-activities-btn {
-      position: static; display: inline-flex; align-self: start; justify-self: end;
-      align-items: center; justify-content: center;
-      padding: 8px 12px; border-radius: 9px; background: #2563eb; font-size: 13px;
-      color: #fff; font-weight: 700; line-height: 1; cursor: pointer; user-select: none;
+      margin-left: 5px; color: #2563eb; font-size: 11px; font-weight: 700;
+      white-space: nowrap; text-decoration: underline; cursor: pointer; user-select: none;
     }
-    .group-activities-btn.is-disabled { cursor: not-allowed; opacity: .45; }
+    .group-activities-btn.is-disabled {
+      color: #94a3b8; cursor: default; opacity: 1; text-decoration: none;
+    }
     .group-activities-message { min-height: 18px; margin: 0 0 7px; color: #4b5563; font-size: 12px; line-height: 1.35; }
     .group-activities-message.error { color: #b91c1c; font-weight: 700; }
     .group-activities-message.success { color: #15803d; font-weight: 700; }
@@ -282,8 +277,8 @@
                 <div xmlns="http://www.w3.org/1999/xhtml" class="model-filter-ui model-activity-ui">
                   <div class="actions"></div>
                   <section class="panel" aria-live="polite">
-                    <div class="activities-heading">
-                      <h2>Actividades registradas</h2>
+                    <h2 class="activities-heading">
+                      Actividades registradas
                       <span
                         id="groupActivitiesButton"
                         class="group-activities-btn is-disabled"
@@ -291,7 +286,7 @@
                         tabindex="0"
                         aria-disabled="true"
                       >Agrupar</span>
-                    </div>
+                    </h2>
                     <p id="groupActivitiesMessage" class="group-activities-message"></p>
                     <p id="activitiesEmpty" class="activities-empty">Todavía no hay actividades.</p>
                     <div id="activitiesWrapper" class="table-wrap">
