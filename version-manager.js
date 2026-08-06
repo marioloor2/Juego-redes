@@ -7,8 +7,9 @@
   const VERSIONS_STORE = "versions";
   const CONTEXT_KEY = "redVerde_workspace_context_v1";
   const BOOTSTRAP_KEY = "redVerde_active_version_bootstrap_v1";
-  const SNAPSHOT_SCHEMA_VERSION = 1;
+  const SNAPSHOT_SCHEMA_VERSION = 2;
   const EXPORT_FORMAT = "red-verde-workspace";
+  const DEFAULT_PROJECT_NAME = "Proyecto_de_prueba_AALL";
   const LEGACY_KEYS = {
     activities: "redVerde_autocad_pdf_distancias_reales_v1",
     lineSettings: "redVerde_autocad_line_settings_v1",
@@ -38,6 +39,15 @@
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
+  }
+
+  function buildProjectCopyName(name, networkType = NETWORK_TYPE) {
+    const type = String(networkType || NETWORK_TYPE).toUpperCase();
+    const base = String(name || "Proyecto")
+      .trim()
+      .replace(/_(AALL|AASS|AAPP)$/i, "")
+      .replace(/\s+/g, "_");
+    return `${base}_copia_${type}`;
   }
 
   function readJson(key, fallback) {
@@ -122,6 +132,8 @@
 
   function captureSnapshot() {
     const network = {
+      type: NETWORK_TYPE,
+      definition: clone(NETWORK_DEFINITION),
       nodes: clone(nodeDefs),
       lines: clone(lineDefs),
       routeEdges: clone(routeEdges),
@@ -164,6 +176,7 @@
     const model = {
       id: makeId("model"),
       name: name.trim(),
+      networkType: snapshot?.network?.type || NETWORK_TYPE,
       createdAt: now,
       updatedAt: now,
       currentVersionId: null,
@@ -197,7 +210,7 @@
     const model = await requestResult(modelsStore.get(modelId));
     if (!model) {
       transaction.abort();
-      throw new Error("No se encontró el modelo activo.");
+      throw new Error("No se encontró el proyecto activo.");
     }
 
     const now = new Date().toISOString();
@@ -207,7 +220,7 @@
       versionNumber: Number(model.nextVersionNumber) || 1,
       savedAt: now,
       note: String(metadata.note || "").trim(),
-      parentVersionId: context.loadedVersionId || model.currentVersionId || null,
+      parentVersionId: metadata.parentVersionId || context.loadedVersionId || model.currentVersionId || null,
       schemaVersion: SNAPSHOT_SCHEMA_VERSION,
       snapshot: clone(snapshot),
       syncState: "local"
@@ -222,14 +235,60 @@
     return { model, version };
   }
 
+  function getBuiltInProjects() {
+    return Array.isArray(globalThis.RED_NETWORK_BUILTIN_PROJECTS)
+      ? globalThis.RED_NETWORK_BUILTIN_PROJECTS
+      : [];
+  }
+
+  async function seedBuiltInProjects(models) {
+    const created = [];
+    for (const project of getBuiltInProjects()) {
+      const snapshot = clone(project.snapshot);
+      if (!snapshot.network.definition) {
+        snapshot.network.definition = clone(NETWORK_DEFINITION);
+      }
+      const revision = Number(project.revision) || 1;
+      const existingBuiltIn = models.find(model => model.builtInKey === project.key);
+      if (existingBuiltIn) {
+        if ((Number(existingBuiltIn.builtInRevision) || 1) >= revision) continue;
+        const result = await createVersion(existingBuiltIn.id, snapshot, {
+          note: `${project.note || "Modelo incorporado"} · revisión ${revision}`,
+          parentVersionId: existingBuiltIn.currentVersionId
+        });
+        result.model.builtInKey = project.key;
+        result.model.builtInRevision = revision;
+        result.model.networkType = project.networkType || snapshot.network.type || NETWORK_TYPE;
+        result.model.sourceMetadata = clone(project.metadata || {});
+        await putModel(result.model);
+        models.splice(models.indexOf(existingBuiltIn), 1, result.model);
+        created.push(result);
+        continue;
+      }
+
+      const existingByName = models.find(model => model.name === project.name);
+      if (existingByName) continue;
+
+      const result = await createModel(project.name, snapshot, project.note || "Modelo incorporado");
+      result.model.builtInKey = project.key;
+      result.model.builtInRevision = revision;
+      result.model.networkType = project.networkType || snapshot.network.type || NETWORK_TYPE;
+      result.model.sourceMetadata = clone(project.metadata || {});
+      await putModel(result.model);
+      models.push(result.model);
+      created.push(result);
+    }
+    return created;
+  }
+
   async function initialize() {
     try {
       database = await openDatabase();
       let models = await getAllModels();
 
       if (!models.length) {
-        const initial = await createModel("Modelo de prueba", captureSnapshot(),
-          "Migración inicial del modelo existente");
+        const initial = await createModel(DEFAULT_PROJECT_NAME, captureSnapshot(),
+          "Migración inicial del proyecto existente");
         models = [initial.model];
         context = {
           activeModelId: initial.model.id,
@@ -237,6 +296,31 @@
         };
         writeJson(CONTEXT_KEY, context);
       }
+
+      for (const model of models) {
+        if (model.name === "Modelo de prueba") {
+          model.name = `Proyecto_de_prueba_${model.networkType || NETWORK_TYPE}`;
+          model.networkType = model.networkType || NETWORK_TYPE;
+          model.updatedAt = new Date().toISOString();
+          await putModel(model);
+        }
+      }
+
+      const createdBuiltIns = await seedBuiltInProjects(models);
+      if (createdBuiltIns.length) {
+        const preferred = createdBuiltIns.find(result =>
+          result.model.name === "Costanera_acacias_AALL") || createdBuiltIns[0];
+        context = {
+          activeModelId: preferred.model.id,
+          loadedVersionId: preferred.version.id
+        };
+        writeJson(CONTEXT_KEY, context);
+        applySnapshot(preferred.version.snapshot);
+        location.reload();
+        return;
+      }
+
+      models = await getAllModels();
 
       activeModel = models.find(model => model.id === context.activeModelId) || models[0];
       activeVersions = await getVersions(activeModel.id);
@@ -267,7 +351,7 @@
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "version-library-toggle";
-    toggle.setAttribute("aria-label", "Abrir modelos y versiones");
+    toggle.setAttribute("aria-label", "Abrir proyectos y versiones");
     toggle.setAttribute("aria-expanded", "false");
     toggle.textContent = "☰";
     header?.prepend(toggle);
@@ -282,7 +366,7 @@
       <header class="version-library-header">
         <div>
           <p class="version-library-kicker">Biblioteca</p>
-          <h2 class="version-library-title">Modelos</h2>
+          <h2 class="version-library-title">Proyectos</h2>
         </div>
         <button class="version-library-close" type="button" aria-label="Cerrar">×</button>
       </header>
@@ -290,7 +374,7 @@
         <section class="version-card version-main-card">
           <div class="version-model-row">
             <div class="version-field">
-              <label for="versionModelSelect">Modelo</label>
+              <label for="versionModelSelect">Proyecto</label>
               <select id="versionModelSelect"></select>
             </div>
             <div class="version-overflow">
@@ -303,8 +387,8 @@
                 aria-expanded="false"
               >⋯</button>
               <div id="moreActionsMenu" class="version-overflow-menu" role="menu" hidden>
-                <button id="renameModelButton" type="button" role="menuitem">Renombrar modelo</button>
-                <button id="duplicateModelButton" type="button" role="menuitem">Duplicar modelo</button>
+                <button id="renameModelButton" type="button" role="menuitem">Renombrar proyecto</button>
+                <button id="duplicateModelButton" type="button" role="menuitem">Duplicar proyecto</button>
                 <div class="version-menu-separator"></div>
                 <button id="addNoteButton" type="button" role="menuitem">Añadir comentario</button>
                 <button id="showHistoryButton" type="button" role="menuitem">Ver historial</button>
@@ -535,7 +619,7 @@
       deleteButton.textContent = "×";
       deleteButton.title = activeVersions.length > 1
         ? `Eliminar ${versionLabel}`
-        : "El modelo debe conservar al menos una versión";
+        : "El proyecto debe conservar al menos una versión";
       deleteButton.setAttribute("aria-label", deleteButton.title);
       deleteButton.disabled = activeVersions.length <= 1;
       deleteButton.addEventListener("click", () => deleteVersion(version.id));
@@ -645,7 +729,7 @@
         Number(b.versionNumber) - Number(a.versionNumber));
     if (!model || !remaining.length) {
       transaction.abort();
-      throw new Error("El modelo debe conservar al menos una versión.");
+      throw new Error("El proyecto debe conservar al menos una versión.");
     }
 
     const now = new Date().toISOString();
@@ -663,7 +747,7 @@
 
   async function deleteVersion(versionId) {
     if (activeVersions.length <= 1) {
-      setFeedback("El modelo debe conservar al menos una versión.", "error");
+      setFeedback("El proyecto debe conservar al menos una versión.", "error");
       return;
     }
 
@@ -732,7 +816,7 @@
       version = (await getVersions(model.id))[0] || null;
     }
     if (!model || !version) {
-      setFeedback("El modelo no tiene una versión válida.", "error");
+      setFeedback("El proyecto no tiene una versión válida.", "error");
       return;
     }
     applySnapshot(version.snapshot);
@@ -744,11 +828,11 @@
   }
 
   async function duplicateActiveModel() {
-    const suggested = `${activeModel?.name || "Modelo"} - copia`;
-    const name = prompt("Nombre del nuevo modelo:", suggested)?.trim();
+    const suggested = buildProjectCopyName(activeModel?.name, activeModel?.networkType);
+    const name = prompt("Nombre del nuevo proyecto (ej.: Costanera_acacias_AALL):", suggested)?.trim();
     if (!name) return;
     try {
-      const result = await createModel(name, captureSnapshot(), "Modelo duplicado");
+      const result = await createModel(name, captureSnapshot(), "Proyecto duplicado");
       applySnapshot(result.version.snapshot);
       writeJson(CONTEXT_KEY, {
         activeModelId: result.model.id,
@@ -757,12 +841,12 @@
       location.reload();
     } catch (error) {
       console.error(error);
-      setFeedback("No se pudo duplicar el modelo.", "error");
+      setFeedback("No se pudo duplicar el proyecto.", "error");
     }
   }
 
   async function renameActiveModel() {
-    const name = prompt("Nuevo nombre del modelo:", activeModel?.name || "")?.trim();
+    const name = prompt("Nuevo nombre del proyecto (ej.: Oryza_AALL):", activeModel?.name || "")?.trim();
     if (!name || name === activeModel?.name) return;
     try {
       activeModel.name = name;
@@ -770,10 +854,10 @@
       await putModel(activeModel);
       updateModelTitle();
       await render();
-      setFeedback("Modelo renombrado.", "success");
+      setFeedback("Proyecto renombrado.", "success");
     } catch (error) {
       console.error(error);
-      setFeedback("No se pudo renombrar el modelo.", "error");
+      setFeedback("No se pudo renombrar el proyecto.", "error");
     }
   }
 

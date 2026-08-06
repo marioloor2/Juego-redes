@@ -81,12 +81,18 @@
     .hit { stroke: transparent; stroke-width: 24; cursor: pointer; }
     .camera-ring { fill: none; stroke: #dc2626; stroke-width: 2.1; pointer-events: none; }
     .node { fill: #111; stroke: #fff; stroke-width: 2.5; cursor: pointer; transition: fill .12s ease, transform .12s ease; transform-box: fill-box; transform-origin: center; }
-    .node.main { stroke: #111; stroke-width: 0; }
+    .node.camera { stroke: #111; stroke-width: 0; }
+    .node.sump { stroke-width: 1.8; }
+    .node.discharge { fill: none; stroke: none; }
+    .headwall-shape { fill: none; stroke: #111; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+    .headwall-hit { fill: transparent; stroke: transparent; pointer-events: all; }
+    .node.discharge.active .headwall-shape { stroke: #16a34a; }
     .node:active { transform: scale(1.1); }
     .node.active { fill: #16a34a; }
     .node-label { fill: #111; font-weight: 700; text-anchor: middle; dominant-baseline: middle; pointer-events: all; cursor: pointer; user-select: none; paint-order: stroke; stroke: #fafafa; stroke-width: 6px; stroke-linejoin: round; }
-    .node-label.main { font-size: 16px; }
-    .node-label.terminal { font-size: 11px; font-weight: 600; fill: #1f2937; stroke-width: 4px; }
+    .node-label.camera { font-size: 16px; }
+    .node-label.sump, .node-label.discharge { font-size: 11px; font-weight: 600; fill: #1f2937; stroke-width: 4px; }
+    .node-label.discharge { fill: #1d4ed8; }
     .distance-group { cursor: pointer; }
     .distance-hit { fill: transparent; pointer-events: all; }
     .distance-text { font-weight: 700; fill: #6b7280; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: #fafafa; stroke-width: 3.5px; stroke-linejoin: round; opacity: .85; }
@@ -233,11 +239,14 @@
     html[data-theme="night"] .node { fill: #f8fafc; stroke: #0f172a; }
     html[data-theme="night"] .node.active { fill: #22c55e; }
     html[data-theme="night"] .camera-ring { stroke: #fb7185; }
+    html[data-theme="night"] .headwall-shape { stroke: #f8fafc; }
+    html[data-theme="night"] .node.discharge.active .headwall-shape { stroke: #22c55e; }
     html[data-theme="night"] .node-label {
       fill: #f8fafc;
       stroke: #070b14;
     }
-    html[data-theme="night"] .node-label.terminal { fill: #e2e8f0; }
+    html[data-theme="night"] .node-label.sump,
+    html[data-theme="night"] .node-label.discharge { fill: #e2e8f0; }
     html[data-theme="night"] .distance-text {
       fill: #cbd5e1;
       stroke: #070b14;
@@ -406,7 +415,7 @@
                 aria-pressed="false"
                 title="Modo nocturno"
               >☾</button>
-              <h1 class="model-title">Visualización de red</h1>
+              <h1 class="model-title">Red de aguas lluvias · AALL</h1>
               <div class="toolbar" aria-label="Controles del diagrama">
                 <button id="zoomOutButton" class="zoom-btn" type="button" aria-label="Alejar">−</button>
                 <button id="fitViewButton" class="zoom-btn fit-btn" type="button">Centrar</button>
@@ -442,7 +451,7 @@
                     <div class="model-filter-stack">
                       <label class="filter-row" for="labelsFilterCheckbox">
                         <input id="labelsFilterCheckbox" type="checkbox" checked />
-                        <span>Cámaras / sumideros</span>
+                        <span id="pointCountsText">Cámaras / sumideros / descargas</span>
                       </label>
                     </div>
                   </section>
@@ -458,6 +467,7 @@
                         <span id="branchProgressText" class="progress-value">0 m / 0 m; 0 %</span>
                       </div>
                     </div>
+                    <p id="collectorProgressWarning" class="progress-warning" hidden></p>
                     <p id="branchProgressWarning" class="progress-warning" hidden></p>
                   </section>
                 </div>
@@ -540,6 +550,7 @@
       <p id="attrSubtitle" class="modal-subtitle"></p>
       <table class="attr-table">
         <tbody>
+          <tr><th scope="row">ID (opcional)</th><td><input id="lineIdentifierInput" type="text" placeholder="Ej.: COL-01" autocomplete="off" /></td></tr>
           <tr><th scope="row">Longitud</th><td><input id="lineLengthInput" type="text" inputmode="decimal" placeholder="Ej.: 38,87" autocomplete="off" /></td></tr>
           <tr><th scope="row">Diámetro</th><td><input id="diameterInput" type="text" placeholder="Ej.: 440 mm" autocomplete="off" /></td></tr>
         </tbody>
@@ -600,6 +611,114 @@
     const MIN_REMAINDER_TOUCH_LENGTH = 22;
     const GUIDE_VISIBILITY_RATIO = 0.58;
 
+    // Modelo de dominio inicial. AALL es la primera familia formalizada; las
+    // futuras redes AASS y AAPP tendran sus propios catalogos y validaciones.
+    const NETWORK_TYPE = 'AALL';
+    const AALL_PIPE_LABEL_RULES = Object.freeze({
+      length: Object.freeze({
+        prefixes: ['L'],
+        unit: 'm',
+        gameAttribute: 'length',
+        requiredForGame: true
+      }),
+      diameter: Object.freeze({
+        symbols: ['Ø', 'Φ', 'phi'],
+        defaultUnit: 'mm',
+        gameAttribute: 'diameter',
+        requiredForGame: false
+      }),
+      contextualOnly: Object.freeze({
+        material: Object.freeze({
+          examples: ['PVC NF'],
+          aliases: Object.freeze({ 'PVC NF': 'PVC Novafort' }),
+          storedByGame: false
+        }),
+        slope: Object.freeze({
+          prefixes: ['P', 'S'],
+          unit: '%',
+          interpretation: '5% = 0.05 m/m = 5 cm por metro',
+          storedByGame: false
+        }),
+        invertEntry: Object.freeze({
+          prefix: 'IE',
+          meaning: 'Cota de entrada del invert de la tubería',
+          storedByGame: false
+        }),
+        invertExit: Object.freeze({
+          prefix: 'IS',
+          meaning: 'Cota de salida del invert de la tubería',
+          storedByGame: false
+        })
+      })
+    });
+    const NETWORK_DEFINITION = Object.freeze({
+      type: NETWORK_TYPE,
+      name: 'Red de aguas lluvias',
+      aliases: ['AL'],
+      operatingPrinciple: 'gravity',
+      structureRules: Object.freeze({
+        multipleDischargesAllowed: true,
+        disconnectedSectionsAllowed: true,
+        eachSectionMayEndAtDischarge: true
+      }),
+      flowRules: Object.freeze({
+        operatingPrinciple: 'gravity',
+        cadArrowBlockNames: ['AL_FLUJO'],
+        arrowTipMeaning: 'downstream',
+        arrowMustBeAlignedWithPipe: true,
+        tieDirection: 'sump-to-chamber',
+        collectorDirection: 'toward-discharge',
+        storeAsTopology: true,
+        countAsConstructedElement: false
+      }),
+      visualizationRules: Object.freeze({
+        tubeModuleMeters: 6,
+        oneTotalLengthLabelPerLine: true,
+        labelEveryTubeModule: false,
+        tubeDivisionGuidesVisibleOnZoom: true
+      }),
+      elementRules: Object.freeze({
+        collector: Object.freeze({ geometry: 'line', lengthRequired: true, diameterRequired: false, identifierRequired: false, labelRules: AALL_PIPE_LABEL_RULES }),
+        tie: Object.freeze({ geometry: 'line', lengthRequired: true, diameterRequired: false, identifierRequired: false, labelRules: AALL_PIPE_LABEL_RULES }),
+        chamber: Object.freeze({
+          geometry: 'point',
+          canonicalName: 'Cámara',
+          symbol: 'circle',
+          identifierRequired: true
+        }),
+        sump: Object.freeze({
+          geometry: 'point',
+          canonicalName: 'Sumidero',
+          cadSymbolsAccepted: ['square', 'rectangular-grate'],
+          recognitionRules: Object.freeze({
+            closedRectangularOutline: true,
+            parallelInteriorBars: true,
+            minimumInteriorBars: 2,
+            variableDimensionsAllowed: true,
+            variableAspectRatioAllowed: true,
+            connectedTieToChamberConfirmsType: true
+          }),
+          htmlSymbol: 'square',
+          identifierRequired: false
+        }),
+        discharge: Object.freeze({
+          geometry: 'point',
+          canonicalName: 'Descarga',
+          aliases: ['muro de ala', 'cabezal'],
+          cadSymbolsAccepted: ['triangle', 'three-broken-lines', 'wing-wall'],
+          htmlSymbol: 'wing-wall',
+          identifierRequired: true,
+          identifierExamples: ['O-13', 'Desc 1'],
+          terminal: true,
+          multipleAllowed: true
+        })
+      })
+    });
+
+    // Clasificación confirmada para el modelo de prueba actual. Los nombres no
+    // determinan el tipo: X31 y X32 son cámaras aunque comiencen con "X".
+    const CURRENT_MODEL_NODE_TYPES = Object.freeze({ X31: 'chamber', X32: 'chamber' });
+
     const nodeDefs = [{"id": "CA1", "x": 238.11, "y": 142.26, "radius": 12, "main": true, "showLabel": true}, {"id": "CA5", "x": 238.14, "y": 1085.72, "radius": 12, "main": true, "showLabel": true}, {"id": "CA2", "x": 238.16, "y": 378.15, "radius": 12, "main": true, "showLabel": true}, {"id": "CA3", "x": 238.17, "y": 613.94, "radius": 12, "main": true, "showLabel": true}, {"id": "CA4", "x": 238.19, "y": 850.31, "radius": 12, "main": true, "showLabel": true}, {"id": "CA7", "x": 731.01, "y": 122.09, "radius": 12, "main": true, "showLabel": true}, {"id": "CA8", "x": 764.74, "y": 356.6, "radius": 12, "main": true, "showLabel": true}, {"id": "CA9", "x": 798.84, "y": 591.1, "radius": 12, "main": true, "showLabel": true}, {"id": "CA10", "x": 833.78, "y": 825.61, "radius": 12, "main": true, "showLabel": true}, {"id": "CA11", "x": 867.41, "y": 1060.19, "radius": 12, "main": true, "showLabel": true}, {"id": "X1", "x": 288.48, "y": 80.15, "radius": 6, "main": false, "parent": "CA1", "showLabel": true}, {"id": "X2", "x": 166.52, "y": 149.92, "radius": 6, "main": false, "parent": "CA1", "showLabel": true}, {"id": "X3", "x": 282.81, "y": 201.92, "radius": 6, "main": false, "parent": "CA1", "showLabel": true}, {"id": "X4", "x": 286.41, "y": 1021.89, "radius": 6, "main": false, "parent": "CA5", "showLabel": true}, {"id": "X5", "x": 284.86, "y": 1142.63, "radius": 6, "main": false, "parent": "CA5", "showLabel": true}, {"id": "X6", "x": 167.38, "y": 1099.0, "radius": 6, "main": false, "parent": "CA5", "showLabel": true}, {"id": "X7", "x": 285.89, "y": 312.08, "radius": 6, "main": false, "parent": "CA2", "showLabel": true}, {"id": "X8", "x": 287.44, "y": 431.28, "radius": 6, "main": false, "parent": "CA2", "showLabel": true}, {"id": "X9", "x": 166.37, "y": 383.67, "radius": 6, "main": false, "parent": "CA2", "showLabel": true}, {"id": "X10", "x": 286.39, "y": 549.25, "radius": 6, "main": false, "parent": "CA3", "showLabel": true}, {"id": "X11", "x": 284.85, "y": 669.99, "radius": 6, "main": false, "parent": "CA3", "showLabel": true}, {"id": "X12", "x": 166.21, "y": 611.51, "radius": 6, "main": false, "parent": "CA3", "showLabel": true}, {"id": "X13", "x": 287.43, "y": 786.95, "radius": 6, "main": false, "parent": "CA4", "showLabel": true}, {"id": "X14", "x": 284.33, "y": 906.66, "radius": 6, "main": false, "parent": "CA4", "showLabel": true}, {"id": "X15", "x": 166.79, "y": 841.06, "radius": 6, "main": false, "parent": "CA4", "showLabel": true}, {"id": "X16", "x": 667.86, "y": 76.53, "radius": 6, "main": false, "parent": "CA7", "showLabel": true}, {"id": "X17", "x": 802.79, "y": 127.73, "radius": 6, "main": false, "parent": "CA7", "showLabel": true}, {"id": "X18", "x": 681.24, "y": 174.12, "radius": 6, "main": false, "parent": "CA7", "showLabel": true}, {"id": "X19", "x": 705.89, "y": 307.6, "radius": 6, "main": false, "parent": "CA8", "showLabel": true}, {"id": "X20", "x": 828.79, "y": 389.5, "radius": 6, "main": false, "parent": "CA8", "showLabel": true}, {"id": "X21", "x": 712.55, "y": 406.2, "radius": 6, "main": false, "parent": "CA8", "showLabel": true}, {"id": "X22", "x": 739.65, "y": 541.76, "radius": 6, "main": false, "parent": "CA9", "showLabel": true}, {"id": "X23", "x": 855.01, "y": 636.14, "radius": 6, "main": false, "parent": "CA9", "showLabel": true}, {"id": "X24", "x": 754.5, "y": 647.83, "radius": 6, "main": false, "parent": "CA9", "showLabel": true}, {"id": "X25", "x": 773.6, "y": 775.41, "radius": 6, "main": false, "parent": "CA10", "showLabel": true}, {"id": "X26", "x": 905.38, "y": 833.24, "radius": 6, "main": false, "parent": "CA10", "showLabel": true}, {"id": "X27", "x": 789.23, "y": 882.17, "radius": 6, "main": false, "parent": "CA10", "showLabel": true}, {"id": "X28", "x": 806.5, "y": 1009.0, "radius": 6, "main": false, "parent": "CA11", "showLabel": true}, {"id": "X29", "x": 934.19, "y": 1033.26, "radius": 6, "main": false, "parent": "CA11", "showLabel": true}, {"id": "X30", "x": 820.23, "y": 1114.58, "radius": 6, "main": false, "parent": "CA11", "showLabel": true}, {"id": "X31", "x": 238.31, "y": 1351.48, "radius": 5, "main": false, "parent": "CA5", "showLabel": true}, {"id": "X32", "x": 893.74, "y": 1324.84, "radius": 5, "main": false, "parent": "CA11", "showLabel": true}];
     const lineDefs = [{"id": "C_CA1_CA2", "name": "CA1-CA2", "from": "CA1", "to": "CA2", "meters": 38.87, "provisional": false, "kind": "collector", "d": "M 238.11 142.26 L 238.16 378.15", "hasDistance": true}, {"id": "C_CA2_CA3", "name": "CA2-CA3", "from": "CA2", "to": "CA3", "meters": 38.85, "provisional": false, "kind": "collector", "d": "M 238.16 378.15 L 238.17 613.94", "hasDistance": true}, {"id": "C_CA3_CA4", "name": "CA3-CA4", "from": "CA3", "to": "CA4", "meters": 38.95, "provisional": false, "kind": "collector", "d": "M 238.17 613.94 L 238.19 850.31", "hasDistance": true}, {"id": "C_CA4_CA5", "name": "CA4-CA5", "from": "CA4", "to": "CA5", "meters": 38.78, "provisional": false, "kind": "collector", "d": "M 238.19 850.31 L 238.14 1085.72", "hasDistance": true}, {"id": "C_CA7_CA8", "name": "CA7-CA8", "from": "CA7", "to": "CA8", "meters": 32.08, "provisional": false, "kind": "collector", "d": "M 731.01 122.09 L 764.74 356.6", "hasDistance": true}, {"id": "C_CA8_CA9", "name": "CA8-CA9", "from": "CA8", "to": "CA9", "meters": 38.86, "provisional": false, "kind": "collector", "d": "M 764.74 356.6 L 798.84 591.1", "hasDistance": true}, {"id": "C_CA9_CA10", "name": "CA9-CA10", "from": "CA9", "to": "CA10", "meters": 38.87, "provisional": false, "kind": "collector", "d": "M 798.84 591.1 L 833.78 825.61", "hasDistance": true}, {"id": "C_CA10_CA11", "name": "CA10-CA11", "from": "CA10", "to": "CA11", "meters": 38.85, "provisional": false, "kind": "collector", "d": "M 833.78 825.61 L 867.41 1060.19", "hasDistance": true}, {"id": "C_CA5_CA11", "name": "CA5-CA11", "from": "CA5", "to": "CA11", "meters": 78.58, "provisional": false, "kind": "collector", "d": "M 238.14 1085.72 L 867.41 1060.19", "hasDistance": true}, {"id": "C_CA5_EXT_L", "name": "CA5-X31", "from": "CA5", "to": "X31", "meters": 38.81, "provisional": false, "kind": "collector", "d": "M 238.14 1085.72 L 238.31 1351.48", "hasDistance": true}, {"id": "C_CA11_EXT_R", "name": "CA11-X32", "from": "CA11", "to": "X32", "meters": 38.85, "provisional": false, "kind": "collector", "d": "M 867.41 1060.19 L 893.74 1324.84", "hasDistance": true}, {"id": "T_CA1_CA1_1", "name": "CA1-X1", "from": "CA1", "to": "X1", "meters": 6.52, "provisional": false, "kind": "branch", "d": "M 238.11 142.26 L 288.48 80.15", "hasDistance": true}, {"id": "T_CA1_CA1_2", "name": "CA1-X2", "from": "CA1", "to": "X2", "meters": 5.27, "provisional": false, "kind": "branch", "d": "M 238.11 142.26 L 166.52 149.92", "hasDistance": true}, {"id": "T_CA1_CA1_3", "name": "CA1-X3", "from": "CA1", "to": "X3", "meters": 6.04, "provisional": false, "kind": "branch", "d": "M 238.11 142.26 L 282.81 201.92", "hasDistance": true}, {"id": "T_CA5_CA5_1", "name": "CA5-X4", "from": "CA5", "to": "X4", "meters": 6.57, "provisional": false, "kind": "branch", "d": "M 238.14 1085.72 L 286.41 1021.89", "hasDistance": true}, {"id": "T_CA5_CA5_2", "name": "CA5-X5", "from": "CA5", "to": "X5", "meters": 5.9, "provisional": false, "kind": "branch", "d": "M 238.14 1085.72 L 284.86 1142.63", "hasDistance": true}, {"id": "T_CA5_CA5_3", "name": "CA5-X6", "from": "CA5", "to": "X6", "meters": 5.43, "provisional": false, "kind": "branch", "d": "M 238.14 1085.72 L 167.38 1099.0", "hasDistance": true}, {"id": "T_CA2_CA2_1", "name": "CA2-X7", "from": "CA2", "to": "X7", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.16 378.15 L 285.89 312.08", "hasDistance": false}, {"id": "T_CA2_CA2_2", "name": "CA2-X8", "from": "CA2", "to": "X8", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.16 378.15 L 287.44 431.28", "hasDistance": false}, {"id": "T_CA2_CA2_3", "name": "CA2-X9", "from": "CA2", "to": "X9", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.16 378.15 L 166.37 383.67", "hasDistance": false}, {"id": "T_CA3_CA3_1", "name": "CA3-X10", "from": "CA3", "to": "X10", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.17 613.94 L 286.39 549.25", "hasDistance": false}, {"id": "T_CA3_CA3_2", "name": "CA3-X11", "from": "CA3", "to": "X11", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.17 613.94 L 284.85 669.99", "hasDistance": false}, {"id": "T_CA3_CA3_3", "name": "CA3-X12", "from": "CA3", "to": "X12", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.17 613.94 L 166.21 611.51", "hasDistance": false}, {"id": "T_CA4_CA4_1", "name": "CA4-X13", "from": "CA4", "to": "X13", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.19 850.31 L 287.43 786.95", "hasDistance": false}, {"id": "T_CA4_CA4_2", "name": "CA4-X14", "from": "CA4", "to": "X14", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.19 850.31 L 284.33 906.66", "hasDistance": false}, {"id": "T_CA4_CA4_3", "name": "CA4-X15", "from": "CA4", "to": "X15", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.19 850.31 L 166.79 841.06", "hasDistance": false}, {"id": "T_CA7_CA7_1", "name": "CA7-X16", "from": "CA7", "to": "X16", "meters": null, "provisional": false, "kind": "branch", "d": "M 731.01 122.09 L 667.86 76.53", "hasDistance": false}, {"id": "T_CA7_CA7_2", "name": "CA7-X17", "from": "CA7", "to": "X17", "meters": null, "provisional": false, "kind": "branch", "d": "M 731.01 122.09 L 802.79 127.73", "hasDistance": false}, {"id": "T_CA7_CA7_3", "name": "CA7-X18", "from": "CA7", "to": "X18", "meters": null, "provisional": false, "kind": "branch", "d": "M 731.01 122.09 L 681.24 174.12", "hasDistance": false}, {"id": "T_CA8_CA8_1", "name": "CA8-X19", "from": "CA8", "to": "X19", "meters": null, "provisional": false, "kind": "branch", "d": "M 764.74 356.6 L 705.89 307.6", "hasDistance": false}, {"id": "T_CA8_CA8_2", "name": "CA8-X20", "from": "CA8", "to": "X20", "meters": null, "provisional": false, "kind": "branch", "d": "M 764.74 356.6 L 828.79 389.5", "hasDistance": false}, {"id": "T_CA8_CA8_3", "name": "CA8-X21", "from": "CA8", "to": "X21", "meters": null, "provisional": false, "kind": "branch", "d": "M 764.74 356.6 L 712.55 406.2", "hasDistance": false}, {"id": "T_CA9_CA9_1", "name": "CA9-X22", "from": "CA9", "to": "X22", "meters": 6.31, "provisional": false, "kind": "branch", "d": "M 798.84 591.1 L 739.65 541.76", "hasDistance": true}, {"id": "T_CA9_CA9_2", "name": "CA9-X23", "from": "CA9", "to": "X23", "meters": 4.06, "provisional": false, "kind": "branch", "d": "M 798.84 591.1 L 855.01 636.14", "hasDistance": true}, {"id": "T_CA9_CA9_3", "name": "CA9-X24", "from": "CA9", "to": "X24", "meters": 5.77, "provisional": false, "kind": "branch", "d": "M 798.84 591.1 L 754.5 647.83", "hasDistance": true}, {"id": "T_CA10_CA10_1", "name": "CA10-X25", "from": "CA10", "to": "X25", "meters": null, "provisional": false, "kind": "branch", "d": "M 833.78 825.61 L 773.6 775.41", "hasDistance": false}, {"id": "T_CA10_CA10_2", "name": "CA10-X26", "from": "CA10", "to": "X26", "meters": null, "provisional": false, "kind": "branch", "d": "M 833.78 825.61 L 905.38 833.24", "hasDistance": false}, {"id": "T_CA10_CA10_3", "name": "CA10-X27", "from": "CA10", "to": "X27", "meters": null, "provisional": false, "kind": "branch", "d": "M 833.78 825.61 L 789.23 882.17", "hasDistance": false}, {"id": "T_CA11_CA11_1", "name": "CA11-X28", "from": "CA11", "to": "X28", "meters": null, "provisional": false, "kind": "branch", "d": "M 867.41 1060.19 L 806.5 1009.0", "hasDistance": false}, {"id": "T_CA11_CA11_2", "name": "CA11-X29", "from": "CA11", "to": "X29", "meters": null, "provisional": false, "kind": "branch", "d": "M 867.41 1060.19 L 934.19 1033.26", "hasDistance": false}, {"id": "T_CA11_CA11_3", "name": "CA11-X30", "from": "CA11", "to": "X30", "meters": null, "provisional": false, "kind": "branch", "d": "M 867.41 1060.19 L 820.23 1114.58", "hasDistance": false}];
     const routeEdges = [{"lineId": "C_CA1_CA2", "from": "CA1", "to": "CA2"}, {"lineId": "C_CA2_CA3", "from": "CA2", "to": "CA3"}, {"lineId": "C_CA3_CA4", "from": "CA3", "to": "CA4"}, {"lineId": "C_CA4_CA5", "from": "CA4", "to": "CA5"}, {"lineId": "C_CA7_CA8", "from": "CA7", "to": "CA8"}, {"lineId": "C_CA8_CA9", "from": "CA8", "to": "CA9"}, {"lineId": "C_CA9_CA10", "from": "CA9", "to": "CA10"}, {"lineId": "C_CA10_CA11", "from": "CA10", "to": "CA11"}, {"lineId": "C_CA5_CA11", "from": "CA5", "to": "CA11"}];
@@ -621,6 +740,79 @@
       }
     }
 
+    function normalizeAallModel() {
+      lineDefs.forEach(line => {
+        line.networkType = NETWORK_TYPE;
+        line.elementType = line.elementType || (line.kind === 'branch' ? 'tie' : 'collector');
+        line.kind = line.elementType === 'tie' ? 'branch' : 'collector';
+        line.requiredAttributes = ['length'];
+        line.optionalAttributes = ['identifier', 'diameter'];
+      });
+
+      nodeDefs.forEach(node => {
+        node.networkType = NETWORK_TYPE;
+        node.elementType = CURRENT_MODEL_NODE_TYPES[node.id]
+          || node.elementType
+          || (node.main ? 'chamber' : 'sump');
+        node.main = node.elementType === 'chamber';
+        if (node.elementType === 'chamber') node.radius = Math.max(12, Number(node.radius) || 0);
+        if (node.elementType === 'sump') node.radius = 6;
+        if (node.elementType === 'discharge') node.radius = Math.max(6, Number(node.radius) || 0);
+        node.identifierRequired = NETWORK_DEFINITION.elementRules[node.elementType]?.identifierRequired === true;
+        node.requiredAttributes = node.identifierRequired ? ['identifier'] : [];
+        const configuredOptionalAttributes = NETWORK_DEFINITION.elementRules[node.elementType]?.optionalAttributes;
+        node.optionalAttributes = Array.isArray(configuredOptionalAttributes)
+          ? [...configuredOptionalAttributes]
+          : (node.identifierRequired ? [] : ['identifier']);
+      });
+
+      // Las rutas de actividades se forman con todos los colectores que unan
+      // cámaras. Las descargas son terminales y no se usan como cámara de ruta.
+      const nodesById = new Map(nodeDefs.map(node => [node.id, node]));
+      lineDefs.forEach(line => {
+        const fromNode = nodesById.get(line.from);
+        const toNode = nodesById.get(line.to);
+        let explicitFlowFrom = line.flowFrom || null;
+        let explicitFlowTo = line.flowTo || null;
+        if (line.flowDirection === 'from-to') {
+          explicitFlowFrom = line.from;
+          explicitFlowTo = line.to;
+        } else if (line.flowDirection === 'to-from') {
+          explicitFlowFrom = line.to;
+          explicitFlowTo = line.from;
+        }
+
+        if (line.elementType === 'tie') {
+          const sump = fromNode?.elementType === 'sump' ? fromNode : toNode;
+          const chamber = fromNode?.elementType === 'chamber' ? fromNode : toNode;
+          if (sump?.elementType === 'sump' && chamber?.elementType === 'chamber') {
+            line.flowConflict = Boolean(
+              explicitFlowFrom && explicitFlowTo
+              && (explicitFlowFrom !== sump.id || explicitFlowTo !== chamber.id)
+            );
+            line.flowFrom = sump.id;
+            line.flowTo = chamber.id;
+            line.flowDirectionSource = explicitFlowFrom ? 'cad-arrow' : 'gravity-topology';
+          }
+        } else if (explicitFlowFrom && explicitFlowTo) {
+          line.flowFrom = explicitFlowFrom;
+          line.flowTo = explicitFlowTo;
+          line.flowDirectionSource = 'cad-arrow';
+        }
+      });
+
+      const normalizedRouteEdges = lineDefs
+        .filter(line =>
+          line.elementType === 'collector'
+          && nodesById.get(line.from)?.elementType === 'chamber'
+          && nodesById.get(line.to)?.elementType === 'chamber'
+        )
+        .map(line => ({ lineId: line.id, from: line.from, to: line.to }));
+      routeEdges.splice(0, routeEdges.length, ...normalizedRouteEdges);
+    }
+
+    normalizeAallModel();
+
     function hasKnownLength(def) {
       return def.hasDistance !== false && Number.isFinite(Number(def.meters)) && Number(def.meters) > 0;
     }
@@ -635,6 +827,19 @@
       const normalized = String(value ?? "").trim().replace(",", ".");
       if (!normalized) return NaN;
       return Number(normalized);
+    }
+
+    function extractGamePipeAttributesFromCadLabel(value) {
+      const text = String(value ?? '');
+      const lengthMatch = text.match(/(?:^|\s)L\s*=\s*(\d+(?:[.,]\d+)?)\s*m\b/i);
+      const diameterMatch = text.match(/(?:Ø|Φ|PHI)\s*(\d+(?:[.,]\d+)?)\s*mm\b/i);
+      const lengthMeters = lengthMatch ? Number(lengthMatch[1].replace(',', '.')) : null;
+      const diameterMillimeters = diameterMatch ? Number(diameterMatch[1].replace(',', '.')) : null;
+      return {
+        lengthMeters: Number.isFinite(lengthMeters) ? lengthMeters : null,
+        diameterMillimeters: Number.isFinite(diameterMillimeters) ? diameterMillimeters : null,
+        diameterLabel: Number.isFinite(diameterMillimeters) ? `${diameterMillimeters} mm` : ''
+      };
     }
 
     function loadLineSettings() {
@@ -670,9 +875,9 @@
     const savedNodeSettings = loadNodeSettings();
     nodeDefs.forEach(node => {
       const saved = savedNodeSettings[node.id];
-      node.displayName = typeof saved?.displayName === 'string' && saved.displayName.trim()
+      node.displayName = typeof saved?.displayName === 'string'
         ? saved.displayName.trim()
-        : node.id;
+        : (typeof node.displayName === 'string' ? node.displayName.trim() : node.id);
     });
 
     const svg = document.getElementById("networkSvg");
@@ -694,6 +899,7 @@
     const status = document.getElementById("status");
     const resetButton = document.getElementById("resetButton");
     const labelsFilterCheckbox = document.getElementById("labelsFilterCheckbox");
+    const pointCountsText = document.getElementById("pointCountsText");
 
     const nodeNameModal = document.getElementById("nodeNameModal");
     const nodeNameSubtitle = document.getElementById("nodeNameSubtitle");
@@ -704,6 +910,7 @@
 
     const attributeModal = document.getElementById("attributeModal");
     const attrSubtitle = document.getElementById("attrSubtitle");
+    const lineIdentifierInput = document.getElementById("lineIdentifierInput");
     const lineLengthInput = document.getElementById("lineLengthInput");
     const diameterInput = document.getElementById("diameterInput");
     const attributeFormError = document.getElementById("attributeFormError");
@@ -729,11 +936,109 @@
     const groupActivitiesMessage = document.getElementById("groupActivitiesMessage");
     const collectorProgressText = document.getElementById("collectorProgressText");
     const branchProgressText = document.getElementById("branchProgressText");
+    const collectorProgressWarning = document.getElementById("collectorProgressWarning");
     const branchProgressWarning = document.getElementById("branchProgressWarning");
 
     const nodeMap = new Map(nodeDefs.map(n => [n.id, n]));
-    const validCameras = nodeDefs.filter(n => n.main).map(n => n.id);
+    const validCameras = nodeDefs.filter(n => n.elementType === 'chamber').map(n => n.id);
+
+    function getNetworkInventory() {
+      return nodeDefs.reduce((inventory, node) => {
+        if (node.elementType === 'chamber') inventory.chambers += 1;
+        else if (node.elementType === 'sump') inventory.sumps += 1;
+        else if (node.elementType === 'discharge') inventory.discharges += 1;
+        return inventory;
+      }, { chambers: 0, sumps: 0, discharges: 0 });
+    }
+
+    const networkInventory = getNetworkInventory();
+    pointCountsText.textContent = `${networkInventory.chambers} cámaras · ${networkInventory.sumps} sumideros · ${networkInventory.discharges} descargas`;
+    pointCountsText.title = `Conteo confirmado: ${networkInventory.sumps} sumideros`;
+
+    function validateAallModel() {
+      const errors = [];
+      const warnings = [];
+      const sumpCountByChamber = new Map();
+
+      nodeDefs.forEach(node => {
+        if (node.identifierRequired && !String(node.displayName || '').trim()) {
+          errors.push(`${getNodeTypeLabel(node)} ${node.id}: falta el ID obligatorio.`);
+        }
+      });
+
+      lineDefs.forEach(line => {
+        const from = nodeMap.get(line.from);
+        const to = nodeMap.get(line.to);
+        if (!from || !to) {
+          errors.push(`${line.id}: uno de sus puntos de conexión no existe.`);
+          return;
+        }
+        if (!hasKnownLength(line)) warnings.push(`${line.id}: falta la longitud obligatoria.`);
+        if (line.flowConflict) errors.push(`${line.id}: la flecha de flujo contradice el sentido por gravedad del tirante.`);
+
+        const endpointTypes = new Set([from.elementType, to.elementType]);
+        if (line.elementType === 'collector') {
+          const valid = endpointTypes.size === 1
+            ? endpointTypes.has('chamber')
+            : endpointTypes.has('chamber') && endpointTypes.has('discharge');
+          if (!valid) errors.push(`${line.id}: un colector debe unir cámaras o terminar en una descarga.`);
+        } else if (line.elementType === 'tie') {
+          const chamberToSump = endpointTypes.has('chamber') && endpointTypes.has('sump');
+          const sumpToSump = endpointTypes.size === 1 && endpointTypes.has('sump');
+          const valid = chamberToSump || sumpToSump;
+          if (!valid) {
+            errors.push(`${line.id}: un tirante debe unir una cámara con un sumidero o dos sumideros consecutivos.`);
+          }
+          if (chamberToSump) {
+            const chamber = from.elementType === 'chamber' ? from : to;
+            const sump = from.elementType === 'sump' ? from : to;
+            if (line.flowFrom !== sump.id || line.flowTo !== chamber.id) {
+              errors.push(`${line.id}: el flujo del tirante debe ir del sumidero hacia la cámara.`);
+            }
+            sumpCountByChamber.set(chamber.id, (sumpCountByChamber.get(chamber.id) || 0) + 1);
+          } else if (sumpToSump) {
+            const validFlow = line.flowFrom && line.flowTo
+              && line.flowFrom !== line.flowTo
+              && [from.id, to.id].includes(line.flowFrom)
+              && [from.id, to.id].includes(line.flowTo);
+            if (!validFlow) {
+              errors.push(`${line.id}: falta definir el sentido del tirante entre sumideros.`);
+            }
+          }
+        }
+      });
+
+      sumpCountByChamber.forEach((count, chamberId) => {
+        if (count > 5) warnings.push(`${chamberId}: tiene ${count} sumideros; es válido, pero supera la cantidad práctica habitual de 5.`);
+      });
+
+      nodeDefs.filter(node => node.elementType === 'discharge').forEach(discharge => {
+        const connectedCollectors = lineDefs.filter(line =>
+          line.elementType === 'collector' && (line.from === discharge.id || line.to === discharge.id)
+        );
+        if (connectedCollectors.length !== 1) {
+          errors.push(`${discharge.id}: una descarga debe ser terminal de exactamente un colector.`);
+        }
+        connectedCollectors.forEach(collector => {
+          if (collector.flowFrom && collector.flowTo && collector.flowTo !== discharge.id) {
+            errors.push(`${collector.id}: la flecha debe dirigir el flujo hacia la descarga ${discharge.id}.`);
+          }
+        });
+      });
+
+      return { ok: errors.length === 0, errors, warnings };
+    }
+
     const lineStates = new Map();
+    const initialModelValidation = validateAallModel();
+    if (initialModelValidation.errors.length) console.error('Errores del modelo AALL:', initialModelValidation.errors);
+    if (initialModelValidation.warnings.length) console.warn('Advertencias del modelo AALL:', initialModelValidation.warnings);
+    window.redNetworkDomain = Object.freeze({
+      definition: NETWORK_DEFINITION,
+      getInventory: getNetworkInventory,
+      extractGamePipeAttributesFromCadLabel,
+      validate: validateAallModel
+    });
     let activities = [];
     let showAllActivities = false;
     const selectedActivityIds = new Set();
@@ -749,7 +1054,7 @@
     const modelPanelsX = (leftmostNodeX - MODEL_PANELS_DRAWING_GAP - modelPanelsWidth).toFixed(2);
     modelFiltersObject.setAttribute('x', modelPanelsX);
     modelActivityObject.setAttribute('x', modelPanelsX);
-    const MIN_VIEW_BOX_WIDTH = DIAGRAM_VIEW_BOX_WIDTH * 0.192;
+    const MIN_VIEW_BOX_WIDTH = DIAGRAM_VIEW_BOX_WIDTH * 0.1536;
     const MAX_VIEW_BOX_WIDTH = INITIAL_VIEW_BOX.width * 1.7;
     const activePointers = new Map();
     let currentViewBox = { ...INITIAL_VIEW_BOX };
@@ -767,9 +1072,10 @@
     function lengths(totalMeters) {
       const total = Number(totalMeters);
       if (!Number.isFinite(total) || total <= 0) return [null];
-      const full = Math.floor(total / 6);
-      const remainder = Number((total - full * 6).toFixed(2));
-      const result = Array(full).fill(6);
+      const tubeModule = NETWORK_DEFINITION.visualizationRules.tubeModuleMeters;
+      const full = Math.floor(total / tubeModule);
+      const remainder = Number((total - full * tubeModule).toFixed(2));
+      const result = Array(full).fill(tubeModule);
       if (remainder > 0.000001) result.push(remainder);
       if (!result.length) result.push(total);
       return result;
@@ -825,7 +1131,13 @@
       const offset = def.kind === 'branch' ? -16 : -14;
       const x = p.x + nx * offset, y = p.y + ny * offset;
       const textValue = `${formatLength(def.meters)} m`;
-      const group = E('g', { class: 'distance-group', transform: `rotate(${deg} ${x} ${y})`, 'data-line-id': def.id });
+      const group = E('g', {
+        class: 'distance-group',
+        transform: `rotate(${deg} ${x} ${y})`,
+        'data-line-id': def.id,
+        role: 'button',
+        'aria-label': `Longitud total de ${getLineDisplayName(def)}: ${textValue}`
+      });
       const width = Math.max(34, textValue.length * 7.8);
       const hit = E('rect', { class: 'distance-hit', x: x - width/2, y: y - 10, width, height: 20, rx: 5, ry: 5 });
       const label = E('text', { class: `distance-text ${def.kind}`, x, y });
@@ -1245,7 +1557,8 @@
       selectedLineId = lineId;
       const state = lineStates.get(lineId);
       attrSubtitle.textContent = getLineDisplayName(state.definition);
-      lineLengthInput.value = formatLength(state.definition.meters);
+      lineIdentifierInput.value = state.attributes.identifier;
+      lineLengthInput.value = hasKnownLength(state.definition) ? formatLength(state.definition.meters) : '';
       diameterInput.value = state.attributes.diameter;
       attributeFormError.textContent = '';
       attributeModal.classList.add('open');
@@ -1262,20 +1575,28 @@
     function todayInputDate() { const now = new Date(); const local = new Date(now.getTime() - now.getTimezoneOffset()*60000); return local.toISOString().slice(0,10); }
     function normalizeName(v) { return String(v ?? '').trim().toUpperCase(); }
 
+    function getNodeTypeLabel(node) {
+      return ({ chamber: 'Cámara', sump: 'Sumidero', discharge: 'Descarga / cabezal' })[node?.elementType] || 'Punto';
+    }
+
     function getNodeDisplayName(nodeId) {
-      return nodeMap.get(nodeId)?.displayName || nodeId;
+      const node = nodeMap.get(nodeId);
+      if (!node) return nodeId;
+      return node.displayName || (node.identifierRequired ? node.id : getNodeTypeLabel(node));
     }
 
     function getLineDisplayName(definition) {
       if (!definition) return '';
-      return `${getNodeDisplayName(definition.from)}–${getNodeDisplayName(definition.to)}`;
+      const routeName = `${getNodeDisplayName(definition.from)}–${getNodeDisplayName(definition.to)}`;
+      const identifier = lineStates.get(definition.id)?.attributes?.identifier || definition.identifier;
+      return identifier ? `${identifier} · ${routeName}` : routeName;
     }
 
     function resolveMainCameraName(value) {
       const normalized = normalizeName(value);
       if (!normalized) return null;
       const match = nodeDefs.find(node =>
-        node.main && (
+        node.elementType === 'chamber' && (
           normalizeName(node.id) === normalized ||
           normalizeName(node.displayName) === normalized
         )
@@ -1286,7 +1607,7 @@
     function saveNodeSettings() {
       const settings = {};
       nodeDefs.forEach(node => {
-        settings[node.id] = { displayName: node.displayName || node.id };
+        settings[node.id] = { displayName: typeof node.displayName === 'string' ? node.displayName : node.id };
       });
       try { localStorage.setItem(NODE_SETTINGS_KEY, JSON.stringify(settings)); } catch {}
     }
@@ -1317,8 +1638,12 @@
       selectedNodeId = nodeId;
       const node = nodeMap.get(nodeId);
       if (!node) return;
-      nodeNameSubtitle.textContent = node.main ? 'Cámara' : 'Sumidero';
-      nodeNameInput.value = node.displayName || node.id;
+      const requirement = node.identifierRequired ? 'ID obligatorio' : 'ID opcional';
+      nodeNameSubtitle.textContent = `${getNodeTypeLabel(node)} · ${requirement}`;
+      nodeNameInput.value = node.displayName || '';
+      nodeNameInput.placeholder = node.elementType === 'discharge'
+        ? 'Ej.: O-13 o Desc 1'
+        : (node.elementType === 'chamber' ? 'Ej.: CA1' : 'Ej.: X1');
       nodeNameError.textContent = '';
       nodeNameModal.classList.add('open');
       nodeNameModal.setAttribute('aria-hidden', 'false');
@@ -1338,20 +1663,20 @@
     function saveNodeName() {
       if (!selectedNodeId) return;
       const newName = nodeNameInput.value.trim();
-      if (!newName) {
-        nodeNameError.textContent = 'El nombre no puede quedar vacío.';
+      const node = nodeMap.get(selectedNodeId);
+      if (!newName && node?.identifierRequired) {
+        nodeNameError.textContent = `El ID de la ${getNodeTypeLabel(node).toLowerCase()} es obligatorio.`;
         return;
       }
 
       const duplicated = nodeDefs.some(node =>
-        node.id !== selectedNodeId && normalizeName(node.displayName) === normalizeName(newName)
+        newName && node.id !== selectedNodeId && normalizeName(node.displayName) === normalizeName(newName)
       );
       if (duplicated) {
         nodeNameError.textContent = 'Ya existe otro punto con ese nombre.';
         return;
       }
 
-      const node = nodeMap.get(selectedNodeId);
       node.displayName = newName;
       saveNodeSettings();
       placeLabels();
@@ -1481,6 +1806,10 @@
       const branchProgress = calculateLineProgress('branch');
       collectorProgressText.textContent = formatProgress(collectorProgress);
       branchProgressText.textContent = formatProgress(branchProgress);
+      collectorProgressWarning.hidden = collectorProgress.missingCount === 0;
+      collectorProgressWarning.textContent = collectorProgress.missingCount === 1
+        ? 'Falta por definir 1 longitud de colector.'
+        : `Faltan por definir ${collectorProgress.missingCount} longitudes de colectores.`;
       branchProgressWarning.hidden = branchProgress.missingCount === 0;
       branchProgressWarning.textContent = branchProgress.missingCount === 1
         ? 'Falta por definir 1 longitud de tirante.'
@@ -1760,6 +2089,7 @@
         const state = lineStates.get(def.id);
         settings[def.id] = {
           meters: hasKnownLength(def) ? Number(def.meters) : null,
+          identifier: state?.attributes?.identifier || '',
           diameter: state?.attributes?.diameter || ''
         };
       });
@@ -1797,7 +2127,10 @@
         fullOverlay,
         guideGroup:null,
         distanceGroup:null,
-        attributes:{ diameter: typeof saved.diameter === 'string' ? saved.diameter : '' }
+        attributes:{
+          identifier: typeof saved.identifier === 'string' ? saved.identifier : (def.identifier || ''),
+          diameter: typeof saved.diameter === 'string' ? saved.diameter : ''
+        }
       };
 
       if (knownLength) {
@@ -1822,23 +2155,92 @@
       state.guideGroup = addSegmentGuides(measure, def);
       state.distanceGroup = addDistanceLabel(measure, def);
       lineStates.set(def.id, state);
+      let lineTapTimer = null;
+      let lastLineTap = 0;
       hit.addEventListener('pointerup', (event) => {
         if (commentPlacementMode) return;
         event.preventDefault();
         if (shouldSuppressTap(event)) return;
         const point = clientToSvg(event.clientX, event.clientY);
         const index = getSegmentIndexAtLength(state, closestLengthOnPath(measure, point));
-        toggleManualSegment(def.id, index);
+        const now = Date.now();
+        if (now - lastLineTap <= DOUBLE_TAP_DELAY) {
+          if (lineTapTimer) clearTimeout(lineTapTimer);
+          lineTapTimer = null;
+          lastLineTap = 0;
+          openAttributes(def.id);
+          return;
+        }
+        lastLineTap = now;
+        lineTapTimer = setTimeout(() => {
+          lineTapTimer = null;
+          toggleManualSegment(def.id, index);
+        }, DOUBLE_TAP_DELAY);
       });
+      hit.addEventListener('dblclick', (event) => {
+        if (commentPlacementMode) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (lineTapTimer) clearTimeout(lineTapTimer);
+        lineTapTimer = null;
+        lastLineTap = 0;
+        openAttributes(def.id);
+      });
+    }
+
+    function getDischargeRotation(node) {
+      const collector = lineDefs.find(line =>
+        line.elementType === 'collector' && (line.from === node.id || line.to === node.id)
+      );
+      if (!collector) return 0;
+      const otherNodeId = collector.from === node.id ? collector.to : collector.from;
+      const otherNode = nodeMap.get(otherNodeId);
+      if (!otherNode) return 0;
+      const incomingAngle = Math.atan2(otherNode.y - node.y, otherNode.x - node.x) * 180 / Math.PI;
+      return incomingAngle - 90;
     }
 
     function buildNodes() {
       nodeDefs.forEach(n => {
-        const circle = E('circle', { class:`node${n.main ? ' main' : ''}`, cx:n.x, cy:n.y, r:n.radius, 'data-node-id':n.id, 'data-active':'false' });
-        circle.addEventListener('pointerup', (event) => { if (commentPlacementMode || shouldSuppressTap(event)) return; toggleNode(n.id); });
-        nodesGroup.appendChild(circle);
+        let shape;
+        let nodeContainer;
+        if (n.elementType === 'sump') {
+          shape = E('rect', {
+            class: 'node sump',
+            x: n.x - n.radius,
+            y: n.y - n.radius,
+            width: n.radius * 2,
+            height: n.radius * 2,
+            rx: 1.2
+          });
+        } else if (n.elementType === 'discharge') {
+          nodeContainer = E('g', {
+            class: 'headwall-anchor',
+            transform: `translate(${n.x} ${n.y}) rotate(${getDischargeRotation(n)})`
+          });
+          shape = E('g', { class: 'node discharge' });
+          shape.appendChild(E('circle', { class: 'headwall-hit', cx: 0, cy: -1, r: 18 }));
+          shape.appendChild(E('path', {
+            class: 'headwall-shape',
+            d: 'M -17 -11 L -11 0 L 11 0 L 17 -11 M -2.4 0 L -2.4 9 M 2.4 0 L 2.4 9'
+          }));
+          nodeContainer.appendChild(shape);
+        } else {
+          shape = E('circle', { class: 'node camera', cx:n.x, cy:n.y, r:n.radius });
+        }
+        shape.setAttribute('data-node-id', n.id);
+        shape.setAttribute('data-node-type', n.elementType);
+        shape.setAttribute('data-active', 'false');
+        shape.addEventListener('pointerup', (event) => { if (commentPlacementMode || shouldSuppressTap(event)) return; toggleNode(n.id); });
+        shape.addEventListener('dblclick', (event) => {
+          if (commentPlacementMode) return;
+          event.preventDefault();
+          event.stopPropagation();
+          openNodeNameEditor(n.id);
+        });
+        nodesGroup.appendChild(nodeContainer || shape);
 
-        if (n.main) {
+        if (n.elementType === 'chamber') {
           const ring = E('circle', {
             class: 'camera-ring',
             cx: n.x,
@@ -1855,9 +2257,10 @@
       labelsGroup.innerHTML = '';
       nodeDefs.forEach(n => {
         if (n.showLabel === false) return;
+        if (!n.identifierRequired && !n.displayName) return;
         let x = n.x, y = n.y;
-        const cls = n.main ? 'main' : 'terminal';
-        if (n.main) {
+        const cls = n.elementType;
+        if (n.elementType === 'chamber') {
           const candidates = [[42,-26],[44,22],[-42,-26],[-44,22],[0,-36],[0,36]];
           let best = candidates[0], score = 1e9;
           for (const [dx,dy] of candidates) {
@@ -1869,7 +2272,7 @@
           }
           x += best[0]; y += best[1];
         } else {
-          const p = nodeMap.get(n.parent); const dx = x - p.x, dy = y - p.y; const len = Math.hypot(dx,dy) || 1;
+          const p = nodeMap.get(n.parent) || { x: x - 1, y }; const dx = x - p.x, dy = y - p.y; const len = Math.hypot(dx,dy) || 1;
           x += dx / len * 24; y += dy / len * 16;
         }
         const text = E('text', {
@@ -1977,6 +2380,8 @@
 
       state.definition.meters = Number(newLength.toFixed(2));
       state.definition.hasDistance = true;
+      state.attributes.identifier = lineIdentifierInput.value.trim();
+      state.definition.identifier = state.attributes.identifier;
       state.attributes.diameter = diameterInput.value.trim();
       saveLineSettings();
 
@@ -2697,7 +3102,8 @@
 })();
 </script>
 
-<script src="./version-manager.js?v=2"></script>
+  <script src="./costanera-acacias-aall.js?v=2"></script>
+<script src="./version-manager.js?v=4"></script>
 <script src="./firebase-config.js"></script>
 <script type="module" src="./firebase-sync.js"></script>
 </body>
