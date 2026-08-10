@@ -137,7 +137,8 @@
       nodes: clone(nodeDefs),
       lines: clone(lineDefs),
       routeEdges: clone(routeEdges),
-      viewBox: clone(INITIAL_VIEW_BOX)
+      viewBox: clone(INITIAL_VIEW_BOX),
+      georeference: clone(globalThis.RED_NETWORK_GEOREFERENCE || null)
     };
 
     return {

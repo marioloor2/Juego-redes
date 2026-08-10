@@ -740,6 +740,129 @@
       }
     }
 
+    // La red y el lindero se calibran en conjunto desde el mismo PDF CAD. Esta
+    // transformacion conserva la orientacion interna del plano y la lleva a un
+    // marco norte-arriba, sin reflejar la red respecto del terreno.
+    const COSTANERA_GEOREFERENCE_VERSION = 3;
+    const COSTANERA_LEGACY_REFLECTION_AXIS_Y = 3264.84;
+    const COSTANERA_PREVIOUS_CAD_TO_MAP_TRANSFORM = Object.freeze({
+      a: 0.801435894,
+      b: -0.598079417,
+      c: -0.598080688,
+      d: -0.801435613,
+      e: 1400.88315,
+      f: 3003.09182
+    });
+    const COSTANERA_CAD_TO_MAP_TRANSFORM = Object.freeze({
+      a: 0.81971732,
+      b: -0.57253169,
+      c: 0.57252583,
+      d: 0.81965616,
+      e: -474.31623831,
+      f: 405.98164451
+    });
+    const costaneraTransformDeterminant = COSTANERA_CAD_TO_MAP_TRANSFORM.a
+      * COSTANERA_CAD_TO_MAP_TRANSFORM.d
+      - COSTANERA_CAD_TO_MAP_TRANSFORM.b * COSTANERA_CAD_TO_MAP_TRANSFORM.c;
+    if (costaneraTransformDeterminant <= 0) {
+      throw new Error('Georreferenciacion rechazada: la red quedaria reflejada respecto del lindero.');
+    }
+    const isCostaneraGeoreferencedModel = nodeDefs.some(node => node.id === 'CAM_AL_24');
+    const loadedGeoreference = versionBootstrap?.network?.georeference || null;
+    const needsCostaneraOrientationCorrection = isCostaneraGeoreferencedModel
+      && loadedGeoreference?.orientationVersion !== COSTANERA_GEOREFERENCE_VERSION;
+
+    function transformCostaneraCadPoint(point) {
+      const x = Number(point.x);
+      const y = Number(point.y);
+      return {
+        x: Number((COSTANERA_CAD_TO_MAP_TRANSFORM.a * x + COSTANERA_CAD_TO_MAP_TRANSFORM.c * y + COSTANERA_CAD_TO_MAP_TRANSFORM.e).toFixed(2)),
+        y: Number((COSTANERA_CAD_TO_MAP_TRANSFORM.b * x + COSTANERA_CAD_TO_MAP_TRANSFORM.d * y + COSTANERA_CAD_TO_MAP_TRANSFORM.f).toFixed(2))
+      };
+    }
+
+    function invertCostaneraTransform(point, transform) {
+      const determinant = transform.a * transform.d - transform.b * transform.c;
+      if (Math.abs(determinant) < 1e-12) {
+        throw new Error('Georreferenciacion invalida: no se puede recuperar la geometria CAD.');
+      }
+      const translatedX = Number(point.x) - transform.e;
+      const translatedY = Number(point.y) - transform.f;
+      return {
+        x: (transform.d * translatedX - transform.c * translatedY) / determinant,
+        y: (-transform.b * translatedX + transform.a * translatedY) / determinant
+      };
+    }
+
+    function restoreCostaneraRawPoint(point) {
+      if (loadedGeoreference?.orientationVersion === 2) {
+        return invertCostaneraTransform(point, COSTANERA_PREVIOUS_CAD_TO_MAP_TRANSFORM);
+      }
+      if (loadedGeoreference?.orientationVersion === 1) {
+        return {
+          x: Number(point.x),
+          y: COSTANERA_LEGACY_REFLECTION_AXIS_Y - Number(point.y)
+        };
+      }
+      return { x: Number(point.x), y: Number(point.y) };
+    }
+
+    function transformAbsoluteMoveLinePath(pathData, transformPoint) {
+      const numberPattern = '[-+]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][-+]?\\d+)?';
+      const coordinatePattern = new RegExp(`([ML])\\s*(${numberPattern})[\\s,]+(${numberPattern})`, 'gi');
+      return String(pathData || '').replace(coordinatePattern, (match, command, x, y) => {
+        const transformed = transformPoint({ x: Number(x), y: Number(y) });
+        return `${command.toUpperCase()} ${transformed.x} ${transformed.y}`;
+      });
+    }
+
+    function transformStoredComments(transformPoint) {
+      const commentsKey = 'redVerde_autocad_comments_v1';
+      try {
+        const parsed = JSON.parse(localStorage.getItem(commentsKey) || '[]');
+        if (!Array.isArray(parsed)) return;
+        const transformed = parsed.map(comment => {
+          if (!Number.isFinite(Number(comment?.x)) || !Number.isFinite(Number(comment?.y))) return comment;
+          return { ...comment, ...transformPoint({ x: Number(comment.x), y: Number(comment.y) }) };
+        });
+        localStorage.setItem(commentsKey, JSON.stringify(transformed));
+      } catch {}
+    }
+
+    if (needsCostaneraOrientationCorrection) {
+      nodeDefs.forEach(node => {
+        const cadPoint = restoreCostaneraRawPoint(node);
+        Object.assign(node, transformCostaneraCadPoint(cadPoint));
+      });
+      lineDefs.forEach(line => {
+        line.d = transformAbsoluteMoveLinePath(line.d, point => (
+          transformCostaneraCadPoint(restoreCostaneraRawPoint(point))
+        ));
+      });
+      transformStoredComments(point => transformCostaneraCadPoint(restoreCostaneraRawPoint(point)));
+    }
+
+    const activeNetworkGeoreference = isCostaneraGeoreferencedModel
+      ? Object.freeze({
+          crs: 'EPSG:32717',
+          orientationVersion: COSTANERA_GEOREFERENCE_VERSION,
+          orientation: 'north-up',
+          cadToMapTransform: { ...COSTANERA_CAD_TO_MAP_TRANSFORM },
+          handednessValidated: true,
+          controlSource: 'shared-cad-pdf-network-and-boundary'
+        })
+      : null;
+    globalThis.RED_NETWORK_GEOREFERENCE = activeNetworkGeoreference;
+
+    if (needsCostaneraOrientationCorrection && versionBootstrap?.network) {
+      versionBootstrap.network.nodes = nodeDefs;
+      versionBootstrap.network.lines = lineDefs;
+      versionBootstrap.network.georeference = { ...activeNetworkGeoreference };
+      try {
+        localStorage.setItem(VERSION_BOOTSTRAP_KEY, JSON.stringify(versionBootstrap));
+      } catch {}
+    }
+
     function normalizeAallModel() {
       lineDefs.forEach(line => {
         line.networkType = NETWORK_TYPE;
@@ -3097,13 +3220,318 @@
     else if (commentPlacementMode) setCommentPlacementMode(false);
   });
 
-  renderComments();
+renderComments();
   updateCommentMarkerScale();
 })();
 </script>
 
+<style>
+  #satelliteLayerGroup,
+  #linderoGroup { pointer-events: none; }
+  .lindero-outline {
+    fill: none;
+    stroke: #f59e0b;
+    stroke-width: 5;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .55));
+  }
+  .lindero-vertex {
+    fill: #facc15;
+    stroke: #713f12;
+    stroke-width: 2.5;
+    vector-effect: non-scaling-stroke;
+  }
+  .lindero-label {
+    fill: #111827;
+    stroke: #fff;
+    stroke-width: 4;
+    paint-order: stroke fill;
+    font-family: Arial, sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+  .satellite-opacity-control {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 5px 10px;
+    padding: 2px 0 0 27px;
+    color: #374151;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .satellite-opacity-control input {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin: 0;
+    accent-color: #16a34a;
+  }
+  .satellite-attribution {
+    margin: 2px 0 0 27px;
+    color: #6b7280;
+    font-size: 10px;
+    line-height: 1.25;
+  }
+  .satellite-attribution a { color: inherit; }
+  html[data-theme="night"] .lindero-label {
+    fill: #fff;
+    stroke: #111827;
+  }
+  html[data-theme="night"] .satellite-opacity-control,
+  html[data-theme="night"] .satellite-attribution { color: #cbd5e1; }
+</style>
+<script>
+(function() {
+  // Este lindero pertenece al modelo incorporado Costanera_acacias_AALL.
+  if (!nodeMap.has('CAM_AL_24')) return;
+
+  const LINDERO_LAYER_SETTINGS_KEY = 'redVerde_costanera_lindero_layers_v1';
+  // Vertices reconstruidos en el mismo marco CAD de la red a partir del PDF
+  // conjunto. Las coordenadas UTM se conservan como fuente geodesica.
+  const linderoPoints = [
+    { id: 'P1',  x: 19.44,   y: 2836.38, east: 603378.2373, north: 9754624.4459 },
+    { id: 'P2',  x: 1315.48, y: 2803.29, east: 603559.6095, north: 9754758.1392 },
+    { id: 'P3',  x: 1267.47, y: 2564.63, east: 603529.0173, north: 9754787.3646 },
+    { id: 'P4',  x: 1145.70, y: 2327.59, east: 603488.0770, north: 9754809.0183 },
+    { id: 'P5',  x: 1093.18, y: 268.28,  east: 603275.6593, north: 9755097.1885 },
+    { id: 'P6',  x: 378.43,  y: 286.65,  east: 603175.6451, north: 9755023.4408 },
+    { id: 'P7',  x: 378.41,  y: 558.69,  east: 603202.7147, north: 9754984.6807 },
+    { id: 'P8',  x: 277.46,  y: 1250.30, east: 603257.1588, north: 9754876.0988 },
+    { id: 'P9',  x: 384.03,  y: 1246.26, east: 603271.9415, north: 9754887.2798 },
+    { id: 'P10', x: 399.84,  y: 1866.57, east: 603335.9254, north: 9754800.4752 },
+    { id: 'P11', x: 162.88,  y: 1872.62, east: 603302.7649, north: 9754776.0317 }
+  ].map(point => ({
+    ...point,
+    ...transformCostaneraCadPoint(point)
+  }));
+  const polygonPoints = linderoPoints.map(point => `${point.x},${point.y}`).join(' ');
+  const drawingUnitsPerMeter = 5.7530408;
+  const satelliteMargin = 5 * drawingUnitsPerMeter;
+  const satelliteExtentPoints = [
+    ...linderoPoints,
+    ...nodeDefs
+      .filter(node => Number.isFinite(Number(node.x)) && Number.isFinite(Number(node.y)))
+      .map(node => ({ x: Number(node.x), y: Number(node.y) }))
+  ];
+  const satelliteBounds = {
+    x: Math.min(...satelliteExtentPoints.map(point => point.x)) - satelliteMargin,
+    y: Math.min(...satelliteExtentPoints.map(point => point.y)) - satelliteMargin,
+    width: Math.max(...satelliteExtentPoints.map(point => point.x))
+      - Math.min(...satelliteExtentPoints.map(point => point.x))
+      + satelliteMargin * 2,
+    height: Math.max(...satelliteExtentPoints.map(point => point.y))
+      - Math.min(...satelliteExtentPoints.map(point => point.y))
+      + satelliteMargin * 2
+  };
+
+  const svgElement = document.getElementById('networkSvg');
+  const baseLayer = document.getElementById('baseLinesGroup');
+  const filtersLayer = document.getElementById('modelFiltersObject');
+
+  const defs = E('defs');
+  const clipPath = E('clipPath', { id: 'linderoSatelliteClip', clipPathUnits: 'userSpaceOnUse' });
+  clipPath.appendChild(E('rect', {
+    x: satelliteBounds.x.toFixed(2),
+    y: satelliteBounds.y.toFixed(2),
+    width: satelliteBounds.width.toFixed(2),
+    height: satelliteBounds.height.toFixed(2)
+  }));
+  defs.appendChild(clipPath);
+  svgElement.insertBefore(defs, svgElement.firstChild);
+
+  const satelliteLayer = E('g', {
+    id: 'satelliteLayerGroup',
+    'clip-path': 'url(#linderoSatelliteClip)',
+    opacity: '0.5',
+    'aria-label': 'Imagen satelital dentro del lindero'
+  });
+  const satelliteTransform = {
+    a: 1.71601668,
+    b: 0.00107929487,
+    c: -0.00106980427,
+    d: 1.70454525,
+    e: -218.055406,
+    f: -99.5703121
+  };
+  const satelliteTransformDeterminant = satelliteTransform.a * satelliteTransform.d
+    - satelliteTransform.b * satelliteTransform.c;
+  // Los mosaicos Web Mercator y el SVG usan X hacia la derecha e Y hacia
+  // abajo. Por eso una rotacion/escala valida debe tener determinante positivo.
+  // Un valor negativo significa que el mapa quedo reflejado.
+  if (satelliteTransformDeterminant <= 0) {
+    throw new Error('Georreferenciacion rechazada: la transformacion satelital refleja el mapa.');
+  }
+  const satelliteTiles = E('g', {
+    transform: `matrix(${satelliteTransform.a} ${satelliteTransform.b} ${satelliteTransform.c} ${satelliteTransform.d} ${satelliteTransform.e} ${satelliteTransform.f})`
+  });
+  const tileZoom = 19;
+  const tileOriginX = 145530;
+  const tileOriginY = 265371;
+  // Carga todos los mosaicos que intersectan el rectangulo calculado con los
+  // extremos de red/lindero y su margen de 5 m; no depende de un rango fijo.
+  const satelliteBoundsCorners = [
+    { x: satelliteBounds.x, y: satelliteBounds.y },
+    { x: satelliteBounds.x + satelliteBounds.width, y: satelliteBounds.y },
+    { x: satelliteBounds.x, y: satelliteBounds.y + satelliteBounds.height },
+    { x: satelliteBounds.x + satelliteBounds.width, y: satelliteBounds.y + satelliteBounds.height }
+  ];
+  const inverseSatellitePoint = point => {
+    const translatedX = point.x - satelliteTransform.e;
+    const translatedY = point.y - satelliteTransform.f;
+    return {
+      x: (satelliteTransform.d * translatedX - satelliteTransform.c * translatedY)
+        / satelliteTransformDeterminant,
+      y: (-satelliteTransform.b * translatedX + satelliteTransform.a * translatedY)
+        / satelliteTransformDeterminant
+    };
+  };
+  const satelliteLocalCorners = satelliteBoundsCorners.map(inverseSatellitePoint);
+  const minSatelliteLocalX = Math.min(...satelliteLocalCorners.map(point => point.x));
+  const maxSatelliteLocalX = Math.max(...satelliteLocalCorners.map(point => point.x));
+  const minSatelliteLocalY = Math.min(...satelliteLocalCorners.map(point => point.y));
+  const maxSatelliteLocalY = Math.max(...satelliteLocalCorners.map(point => point.y));
+  const firstTileX = tileOriginX + Math.floor(minSatelliteLocalX / 256);
+  const lastTileX = tileOriginX + Math.floor(maxSatelliteLocalX / 256);
+  const firstTileY = tileOriginY + Math.floor(minSatelliteLocalY / 256);
+  const lastTileY = tileOriginY + Math.floor(maxSatelliteLocalY / 256);
+
+  for (let tileY = firstTileY; tileY <= lastTileY; tileY += 1) {
+    for (let tileX = firstTileX; tileX <= lastTileX; tileX += 1) {
+      const image = E('image', {
+        x: (tileX - tileOriginX) * 256,
+        y: (tileY - tileOriginY) * 256,
+        width: 256,
+        height: 256,
+        preserveAspectRatio: 'none',
+        href: `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileZoom}/${tileY}/${tileX}`
+      });
+      image.setAttributeNS(
+        'http://www.w3.org/1999/xlink',
+        'href',
+        `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileZoom}/${tileY}/${tileX}`
+      );
+      satelliteTiles.appendChild(image);
+    }
+  }
+  satelliteLayer.appendChild(satelliteTiles);
+  svgElement.insertBefore(satelliteLayer, baseLayer);
+
+  const linderoGroup = E('g', { id: 'linderoGroup', 'aria-label': 'Lindero georreferenciado' });
+  const outline = E('polygon', { class: 'lindero-outline', points: polygonPoints });
+  const outlineTitle = E('title');
+  outlineTitle.textContent = 'Lindero georreferenciado - WGS84 / UTM 17S';
+  outline.appendChild(outlineTitle);
+  linderoGroup.appendChild(outline);
+
+  linderoPoints.forEach(point => {
+    const marker = E('g', { transform: `translate(${point.x} ${point.y})` });
+    const markerTitle = E('title');
+    markerTitle.textContent = `${point.id} - Este ${point.east.toFixed(4)} m, Norte ${point.north.toFixed(4)} m`;
+    const circle = E('circle', { class: 'lindero-vertex', r: 13 });
+    const label = E('text', { class: 'lindero-label', x: 0, y: 1 });
+    label.textContent = point.id.replace('P', '');
+    marker.append(markerTitle, circle, label);
+    linderoGroup.appendChild(marker);
+  });
+  svgElement.insertBefore(linderoGroup, filtersLayer);
+
+  const filtersStack = document.querySelector('.model-filter-stack');
+  const linderoFilterLabel = document.createElement('label');
+  linderoFilterLabel.className = 'filter-row';
+  linderoFilterLabel.setAttribute('for', 'linderoFilterCheckbox');
+  linderoFilterLabel.innerHTML = '<input id="linderoFilterCheckbox" type="checkbox" checked /><span>Lindero y vertices</span>';
+
+  const satelliteFilterLabel = document.createElement('label');
+  satelliteFilterLabel.className = 'filter-row';
+  satelliteFilterLabel.setAttribute('for', 'satelliteFilterCheckbox');
+  satelliteFilterLabel.innerHTML = '<input id="satelliteFilterCheckbox" type="checkbox" checked /><span>Imagen satelital</span>';
+
+  const opacityControl = document.createElement('label');
+  opacityControl.className = 'satellite-opacity-control';
+  opacityControl.setAttribute('for', 'satelliteOpacityRange');
+  opacityControl.innerHTML = '<span>Transparencia</span><output id="satelliteOpacityValue">50 %</output><input id="satelliteOpacityRange" type="range" min="0" max="100" step="5" value="50" />';
+
+  const attribution = document.createElement('p');
+  attribution.className = 'satellite-attribution';
+  attribution.innerHTML = 'Imagen: <a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noopener noreferrer">Esri World Imagery</a> y sus proveedores.';
+
+  filtersStack.append(linderoFilterLabel, satelliteFilterLabel, opacityControl, attribution);
+  document.getElementById('modelFiltersObject')?.setAttribute('height', '410');
+  document.getElementById('modelActivityObject')?.setAttribute('y', '455');
+
+  const linderoCheckbox = document.getElementById('linderoFilterCheckbox');
+  const satelliteCheckbox = document.getElementById('satelliteFilterCheckbox');
+  const opacityRange = document.getElementById('satelliteOpacityRange');
+  const opacityValue = document.getElementById('satelliteOpacityValue');
+
+  function loadLayerSettings() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(LINDERO_LAYER_SETTINGS_KEY) || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveLayerSettings() {
+    try {
+      localStorage.setItem(LINDERO_LAYER_SETTINGS_KEY, JSON.stringify({
+        showLindero: linderoCheckbox.checked,
+        showSatellite: satelliteCheckbox.checked,
+        satelliteOpacity: Number(opacityRange.value) / 100
+      }));
+    } catch {}
+  }
+
+  function applyLayerSettings() {
+    linderoGroup.style.display = linderoCheckbox.checked ? '' : 'none';
+    satelliteLayer.style.display = satelliteCheckbox.checked ? '' : 'none';
+    satelliteLayer.setAttribute('opacity', (Number(opacityRange.value) / 100).toFixed(2));
+    opacityValue.textContent = `${opacityRange.value} %`;
+    opacityControl.style.opacity = satelliteCheckbox.checked ? '1' : '.45';
+    opacityRange.disabled = !satelliteCheckbox.checked;
+  }
+
+  const savedSettings = loadLayerSettings();
+  linderoCheckbox.checked = savedSettings.showLindero !== false;
+  satelliteCheckbox.checked = savedSettings.showSatellite !== false;
+  opacityRange.value = Number.isFinite(Number(savedSettings.satelliteOpacity))
+    ? String(Math.round(Math.max(0, Math.min(1, Number(savedSettings.satelliteOpacity))) * 100))
+    : '50';
+  applyLayerSettings();
+
+  linderoCheckbox.addEventListener('change', () => {
+    applyLayerSettings();
+    saveLayerSettings();
+  });
+  satelliteCheckbox.addEventListener('change', () => {
+    applyLayerSettings();
+    saveLayerSettings();
+  });
+  opacityRange.addEventListener('input', applyLayerSettings);
+  opacityRange.addEventListener('change', saveLayerSettings);
+
+  // Incluye red, lindero, satelite y paneles al usar el boton Centrar.
+  const originalRight = INITIAL_VIEW_BOX.x + INITIAL_VIEW_BOX.width;
+  const originalBottom = INITIAL_VIEW_BOX.y + INITIAL_VIEW_BOX.height;
+  const panelsX = Number(document.getElementById('modelFiltersObject')?.getAttribute('x')) || INITIAL_VIEW_BOX.x;
+  const expandedLeft = Math.min(INITIAL_VIEW_BOX.x, satelliteBounds.x, panelsX - 20);
+  const expandedTop = Math.min(INITIAL_VIEW_BOX.y, satelliteBounds.y);
+  const expandedRight = Math.max(originalRight, satelliteBounds.x + satelliteBounds.width);
+  const expandedBottom = Math.max(originalBottom, satelliteBounds.y + satelliteBounds.height);
+  INITIAL_VIEW_BOX.x = expandedLeft;
+  INITIAL_VIEW_BOX.y = expandedTop;
+  INITIAL_VIEW_BOX.width = expandedRight - expandedLeft;
+  INITIAL_VIEW_BOX.height = expandedBottom - expandedTop;
+  currentViewBox = { ...INITIAL_VIEW_BOX };
+  applyViewBox();
+})();
+</script>
+
   <script src="./costanera-acacias-aall.js?v=2"></script>
-<script src="./version-manager.js?v=4"></script>
+<script src="./version-manager.js?v=5"></script>
 <script src="./firebase-config.js"></script>
 <script type="module" src="./firebase-sync.js"></script>
 </body>
