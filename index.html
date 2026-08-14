@@ -69,6 +69,11 @@
       box-shadow: 0 3px 12px rgba(0,0,0,.1);
       font-size: 12px; line-height: 1; white-space: nowrap;
     }
+    .quick-actions .rock-zone-btn {
+      position: absolute; top: calc(100% + 6px); right: 0; left: 0;
+      width: auto; max-width: none; padding-right: 6px; padding-left: 6px;
+      font-size: clamp(8px, 2.35vw, 10px); line-height: 1.1; text-align: center;
+    }
     .viewport { position: relative; overflow: hidden; width: 100%; height: 100%; background: #fafafa; touch-action: none; cursor: grab; }
     .viewport.panning { cursor: grabbing; }
     svg { display: block; width: 100%; height: 100%; min-height: 0; background: #fafafa; user-select: none; touch-action: none; }
@@ -158,6 +163,7 @@
       scrollbar-width: thin;
     }
     .model-activity-ui .actions { display: grid; gap: 8px; margin: 0 0 10px; }
+    .model-activity-ui .actions:empty { min-height: 39px; }
     .model-activity-ui .actions button { width: 100%; padding: 10px 9px; font-size: 13px; }
     .model-activity-ui .panel {
       padding: 12px; border: 1px solid #d1d5db; border-radius: 12px;
@@ -439,6 +445,20 @@
       background: #1f1318;
       color: #fca5a5;
     }
+    @media (max-width: 600px) {
+      .model-filter-overlay {
+        top: max(61px, calc(env(safe-area-inset-top) + 61px));
+        width: 35vw;
+      }
+      .model-filter-overlay .filter-row span { min-width: 0; overflow-wrap: break-word; }
+      .model-filter-overlay .progress-list { gap: 4px; }
+      .model-filter-overlay .progress-row { min-width: 0; gap: 5px; }
+      .model-filter-overlay .progress-donut {
+        width: min(58px, 100%); height: auto; aspect-ratio: 1;
+      }
+      .model-filter-overlay .progress-donut::before { inset: 8px; }
+      .model-filter-overlay .progress-value { font-size: 12px; }
+    }
     @media (max-width: 420px) {
       .model-header { top: max(5px, env(safe-area-inset-top)); right: 5px; left: 5px; gap: 5px; }
       .model-header .model-title {
@@ -460,10 +480,10 @@
       }
       .quick-actions { top: calc(100% + 5px); gap: 4px; }
       .quick-action-btn { min-height: 28px; padding: 4px 7px; font-size: 10px; }
+      .quick-actions .rock-zone-btn { top: calc(100% + 4px); }
       .model-filter-overlay {
-        top: max(76px, calc(env(safe-area-inset-top) + 76px));
+        top: max(48px, calc(env(safe-area-inset-top) + 48px));
         left: max(6px, env(safe-area-inset-left));
-        width: min(210px, calc(100vw - 12px - env(safe-area-inset-left) - env(safe-area-inset-right)));
         max-height: min(68dvh, calc(100dvh - 87px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
       }
       .model-filter-content {
@@ -481,7 +501,7 @@
       .model-filter-overlay .progress-legend-swatch { width: 6px; height: 6px; }
       .model-filter-overlay .progress-list { gap: 5px; }
       .model-filter-overlay .progress-row { gap: 4px; font-size: 9.5px; }
-      .model-filter-overlay .progress-donut { width: 50px; height: 50px; }
+      .model-filter-overlay .progress-donut { width: min(50px, 100%); height: auto; aspect-ratio: 1; }
       .model-filter-overlay .progress-donut::before { inset: 7px; }
       .model-filter-overlay .progress-value { font-size: 11px; }
       .model-filter-overlay .progress-warning { margin-top: 5px; font-size: 8px; }
@@ -553,7 +573,7 @@
                     <div class="model-filter-stack">
                       <label class="filter-row" for="labelsFilterCheckbox">
                         <input id="labelsFilterCheckbox" type="checkbox" checked />
-                        <span id="pointCountsText">ID Cámaras / Sumideros / Descargas</span>
+                        <span id="pointCountsText">ID Cámaras</span>
                       </label>
                     </div>
                   </section>
@@ -1220,7 +1240,7 @@
       }, { chambers: 0, sumps: 0, discharges: 0 });
     }
 
-    pointCountsText.textContent = 'ID Cámaras / Sumideros / Descargas';
+    pointCountsText.textContent = 'ID Cámaras';
     pointCountsText.title = 'Mostrar u ocultar los ID de cámaras, sumideros y descargas';
 
     function validateAallModel() {
@@ -2708,7 +2728,6 @@
   </script>
 
 <style>
-  .rock-zone-btn { background: #6b7280; }
   .rock-panel { margin-top: 14px; }
   .rock-empty { margin: 0; padding: 16px 10px; color: #6b7280; text-align: center; font-size: 14px; }
   .rock-zones-table th:nth-child(1), .rock-zones-table td:nth-child(1) { width: 78%; }
@@ -2719,13 +2738,13 @@
 (function() {
   const ROCK_ZONES_KEY = 'redVerde_autocad_rock_zones_v1';
 
-  const actionsBox = document.querySelector('.actions');
+  const quickActions = document.querySelector('.quick-actions');
   const rockButton = document.createElement('button');
   rockButton.id = 'openRockZoneButton';
   rockButton.type = 'button';
-  rockButton.className = 'rock-zone-btn';
+  rockButton.className = 'zoom-btn quick-action-btn rock-zone-btn';
   rockButton.textContent = 'Registrar zona de obstrucción';
-  actionsBox.appendChild(rockButton);
+  quickActions.appendChild(rockButton);
 
   const filtersStack = document.querySelector('.model-filter-stack');
   const filterLabel = document.createElement('label');
@@ -3427,13 +3446,16 @@ renderComments();
   }
   html[data-theme="night"] .satellite-opacity-control,
   html[data-theme="night"] .satellite-attribution { color: #cbd5e1; }
-  @media (max-width: 420px) {
+  @media (max-width: 600px) {
     .model-filter-overlay .satellite-opacity-control {
-      gap: 3px 6px; padding: 1px 0 0 21px; font-size: 9px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 3px 4px; padding: 1px 0 0 18px; font-size: 9px;
     }
+    .model-filter-overlay .satellite-opacity-control span,
+    .model-filter-overlay .satellite-opacity-control output { white-space: nowrap; }
     .model-filter-overlay .satellite-opacity-control input { height: 14px; }
     .model-filter-overlay .satellite-attribution {
-      margin: 1px 0 0 21px; font-size: 7.5px; line-height: 1.15;
+      margin: 1px 0 0 18px; font-size: 7.5px; line-height: 1.15;
     }
   }
 </style>
