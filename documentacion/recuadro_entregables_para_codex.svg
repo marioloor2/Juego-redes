@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1220" viewBox="0 0 1400 1220">
+  <defs>
+    <filter id="paper" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="2" seed="7" result="noise"/>
+      <feColorMatrix in="noise" type="saturate" values="0" result="gray"/>
+      <feComponentTransfer in="gray" result="faint">
+        <feFuncA type="table" tableValues="0 0.035"/>
+      </feComponentTransfer>
+      <feBlend in="SourceGraphic" in2="faint" mode="multiply"/>
+    </filter>
+    <style>
+      .hand { font-family: "Segoe Print", "Comic Sans MS", cursive; fill: #123fd0; }
+      .title { font-size: 49px; font-weight: 600; }
+      .section { font-size: 35px; font-weight: 600; }
+      .body { font-size: 29px; }
+      .note { font-size: 27px; fill: #128a2e; }
+      .number { font-family: "Segoe Print", "Comic Sans MS", cursive; fill: #123fd0; font-size: 34px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="1220" fill="#fffefb" filter="url(#paper)"/>
+
+  <!-- Contorno ondulado inspirado en la hoja de referencia -->
+  <path d="
+    M108 88
+    Q128 60 158 79 Q181 48 210 74 Q237 49 264 75 Q291 48 319 74
+    Q346 48 374 75 Q402 49 429 74 Q457 48 485 75 Q513 49 541 74
+    Q569 48 597 75 Q625 49 653 74 Q681 48 709 75 Q737 49 765 74
+    Q793 48 821 75 Q849 49 877 74 Q905 48 933 75 Q961 49 989 74
+    Q1017 48 1045 75 Q1073 49 1101 74 Q1129 48 1157 75 Q1185 49 1213 74
+    Q1241 50 1261 82 Q1295 72 1298 110
+    Q1326 132 1300 160 Q1325 188 1300 216 Q1325 244 1300 272
+    Q1325 300 1300 328 Q1325 356 1300 384 Q1325 412 1300 440
+    Q1325 468 1300 496 Q1325 524 1300 552 Q1325 580 1300 608
+    Q1325 636 1300 664 Q1325 692 1300 720 Q1325 748 1300 776
+    Q1325 804 1300 832 Q1325 860 1300 888 Q1325 916 1300 944
+    Q1325 972 1300 1000 Q1325 1028 1300 1056 Q1325 1084 1294 1104
+    Q1290 1140 1256 1136
+    Q1234 1165 1205 1140 Q1177 1165 1149 1140 Q1121 1165 1093 1140
+    Q1065 1165 1037 1140 Q1009 1165 981 1140 Q953 1165 925 1140
+    Q897 1165 869 1140 Q841 1165 813 1140 Q785 1165 757 1140
+    Q729 1165 701 1140 Q673 1165 645 1140 Q617 1165 589 1140
+    Q561 1165 533 1140 Q505 1165 477 1140 Q449 1165 421 1140
+    Q393 1165 365 1140 Q337 1165 309 1140 Q281 1165 253 1140
+    Q225 1165 197 1140 Q169 1165 145 1136 Q108 1143 105 1105
+    Q76 1083 100 1055 Q75 1027 100 999 Q75 971 100 943
+    Q75 915 100 887 Q75 859 100 831 Q75 803 100 775
+    Q75 747 100 719 Q75 691 100 663 Q75 635 100 607
+    Q75 579 100 551 Q75 523 100 495 Q75 467 100 439
+    Q75 411 100 383 Q75 355 100 327 Q75 299 100 271
+    Q75 243 100 215 Q75 187 100 159 Q74 132 103 109
+    Q99 96 108 88 Z"
+    fill="none" stroke="#163ed1" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="700" y="155" text-anchor="middle" class="hand title">Entregables para Codex</text>
+  <path d="M410 176 Q700 188 990 175" fill="none" stroke="#ff2020" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Entregable 1 -->
+  <circle cx="169" cy="241" r="32" fill="none" stroke="#163ed1" stroke-width="4"/>
+  <text x="169" y="253" text-anchor="middle" class="number">1</text>
+  <text x="222" y="251" class="hand section">PDF en alta calidad</text>
+
+  <text x="170" y="317" class="hand body">
+    <tspan x="170" dy="0">• Tuberías y tirantes con sus colores:</tspan>
+    <tspan x="215" dy="45">azul para mayor jerarquía y rojo para menor jerarquía.</tspan>
+    <tspan x="170" dy="58">• Cámaras, sumideros, muros de ala, etc.</tspan>
+    <tspan x="170" dy="58">• Linderos del terreno en color verde.</tspan>
+    <tspan x="170" dy="58">• Puntos enumerados en color magenta.</tspan>
+    <tspan x="215" dy="45">Estos puntos servirán luego para georreferenciar el sistema.</tspan>
+  </text>
+
+  <path d="M165 619 Q700 631 1235 618" fill="none" stroke="#ff2020" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Entregable 2 -->
+  <circle cx="169" cy="692" r="32" fill="none" stroke="#163ed1" stroke-width="4"/>
+  <text x="169" y="704" text-anchor="middle" class="number">2</text>
+  <text x="222" y="702" class="hand section">Documento de texto</text>
+
+  <text x="170" y="769" class="hand body">
+    <tspan x="170" dy="0">• Lista de los puntos con su misma enumeración.</tspan>
+    <tspan x="170" dy="58">• Coordenadas correspondientes a cada punto.</tspan>
+  </text>
+
+  <!-- Nota práctica -->
+  <path d="M158 895 Q176 871 202 889 Q226 865 251 888 Q276 865 301 888
+           Q326 865 351 888 Q376 865 401 888 Q426 865 451 888 Q476 865 501 888
+           Q526 865 551 888 Q576 865 601 888 Q626 865 651 888 Q676 865 701 888
+           Q726 865 751 888 Q776 865 801 888 Q826 865 851 888 Q876 865 901 888
+           Q926 865 951 888 Q976 865 1001 888 Q1026 865 1051 888 Q1076 865 1101 888
+           Q1126 865 1151 888 Q1176 865 1201 889 Q1230 873 1241 901
+           Q1264 920 1244 944 Q1264 968 1244 992 Q1264 1016 1244 1040
+           Q1262 1067 1233 1080
+           Q1208 1102 1183 1080 Q1158 1103 1133 1080 Q1108 1103 1083 1080
+           Q1058 1103 1033 1080 Q1008 1103 983 1080 Q958 1103 933 1080
+           Q908 1103 883 1080 Q858 1103 833 1080 Q808 1103 783 1080
+           Q758 1103 733 1080 Q708 1103 683 1080 Q658 1103 633 1080
+           Q608 1103 583 1080 Q558 1103 533 1080 Q508 1103 483 1080
+           Q458 1103 433 1080 Q408 1103 383 1080 Q358 1103 333 1080
+           Q308 1103 283 1080 Q258 1103 233 1080 Q208 1102 183 1080
+           Q151 1068 158 1038 Q138 1014 158 990 Q138 966 158 942
+           Q136 918 158 895 Z"
+        fill="none" stroke="#16a13a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="700" y="935" text-anchor="middle" class="hand note" font-weight="600">Nota importante</text>
+  <path d="M584 949 Q700 957 816 949" fill="none" stroke="#ff2020" stroke-width="3"/>
+  <text x="196" y="989" class="hand note">
+    <tspan x="196" dy="0">Aunque los linderos todavía no estén georreferenciados, se deben</tspan>
+    <tspan x="196" dy="42">entregar usando el sistema local del CAD. Así, si después se obtienen</tspan>
+    <tspan x="196" dy="42">las coordenadas reales, será posible georreferenciar todo el plano.</tspan>
+  </text>
+</svg>

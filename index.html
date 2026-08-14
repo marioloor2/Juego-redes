@@ -44,9 +44,8 @@
       font-size: clamp(16px, 4.5vw, 22px); line-height: 1.1; white-space: nowrap;
     }
     .toolbar {
-      display: flex; justify-content: flex-end; gap: 5px; padding: 5px;
-      border: 1px solid rgba(209,213,219,.9); border-radius: 11px;
-      background: rgba(255,255,255,.94); box-shadow: 0 3px 12px rgba(0,0,0,.1);
+      display: flex; justify-content: flex-end; gap: 0; padding: 0;
+      border: 0; border-radius: 0; background: transparent; box-shadow: none;
       pointer-events: auto;
     }
     .zoom-btn { min-width: 34px; min-height: 34px; padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: #111; font-size: 18px; line-height: 1; cursor: pointer; }
@@ -128,7 +127,7 @@
     .filter-row { display: flex; align-items: center; gap: 9px; color: #1f2937; font-size: 14px; font-weight: 700; cursor: pointer; }
     .filter-row input { width: 18px; height: 18px; margin: 0; accent-color: #16a34a; cursor: pointer; }
     .model-filter-object { overflow: visible; }
-    .model-filter-overlay {
+    .model-left-overlays {
       position: absolute; z-index: 5;
       top: max(96px, calc(env(safe-area-inset-top) + 96px));
       left: max(8px, env(safe-area-inset-left));
@@ -136,8 +135,16 @@
       max-width: calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right));
       max-height: calc(100dvh - 108px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
       display: grid; align-content: start; gap: 6px;
+      overflow-y: auto; padding-right: 2px;
       font-family: Arial, sans-serif; pointer-events: auto;
       touch-action: pan-y; overscroll-behavior: contain;
+      scrollbar-width: thin; -webkit-overflow-scrolling: touch;
+    }
+    .model-filter-overlay,
+    .model-records-overlay {
+      position: static; width: 100%; min-width: 0;
+      display: grid; align-content: start; gap: 6px;
+      font-family: Arial, sans-serif; pointer-events: auto;
     }
     .model-filter-toggle {
       width: 100%; min-height: 42px; padding: 9px 12px;
@@ -155,6 +162,26 @@
       scrollbar-width: thin; -webkit-overflow-scrolling: touch;
     }
     .model-filter-content[hidden] { display: none; }
+    .model-records-content {
+      min-width: 0; overflow: hidden; padding: 1px 2px 8px 1px;
+    }
+    .model-records-content[hidden] { display: none; }
+    .records-tabs {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px;
+      margin-bottom: 6px; padding: 4px;
+      border: 1px solid #d1d5db; border-radius: 10px;
+      background: rgba(255,255,255,.97); box-shadow: 0 4px 14px rgba(0,0,0,.13);
+    }
+    .records-tab {
+      min-width: 0; min-height: 30px; padding: 5px 4px;
+      border: 0; border-radius: 7px; background: #e5e7eb; color: #374151;
+      font-size: 10px; line-height: 1.1; white-space: normal;
+    }
+    .records-tab[aria-selected="true"] { background: #16a34a; color: #fff; }
+    .model-records-overlay .model-activity-ui { height: auto; max-height: none; padding-right: 0; overflow: visible; }
+    .model-records-overlay .model-activity-ui .actions:empty { display: none; min-height: 0; margin: 0; }
+    .model-records-overlay .model-activity-ui .panel { margin: 0; width: 100%; }
+    .model-records-overlay .model-activity-ui .rock-panel { margin-top: 0; }
     .model-filter-ui { width: 100%; height: auto; font-family: Arial, sans-serif; pointer-events: auto; }
     .model-activity-object { overflow: visible; }
     .model-activity-ui {
@@ -287,7 +314,6 @@
       color: #f8fafc;
     }
     html[data-theme="night"] .model-title,
-    html[data-theme="night"] .toolbar,
     html[data-theme="night"] .zoom-btn,
     html[data-theme="night"] .quick-action-btn,
     html[data-theme="night"] .theme-toggle-button,
@@ -325,6 +351,7 @@
     }
     html[data-theme="night"] .filter-panel,
     html[data-theme="night"] .model-activity-ui .panel,
+    html[data-theme="night"] .records-tabs,
     html[data-theme="night"] .modal {
       border-color: #475569;
       background: rgba(15,23,42,.97);
@@ -373,6 +400,7 @@
     }
     html[data-theme="night"] .secondary,
     html[data-theme="night"] .activities-toggle,
+    html[data-theme="night"] .records-tab:not([aria-selected="true"]),
     html[data-theme="night"] .rock-zone-chip {
       border-color: #475569;
       background: #334155;
@@ -446,7 +474,15 @@
       color: #fca5a5;
     }
     @media (max-width: 600px) {
-      .model-filter-overlay {
+      .model-header { gap: 6px; }
+      .model-header .model-title {
+        flex: 1 1 auto; min-width: 0; max-width: none;
+        overflow: hidden; padding: 6px 8px;
+        font-size: clamp(14px, 3.8vw, 18px); text-overflow: ellipsis;
+      }
+      .toolbar { flex: 0 0 auto; padding: 0; }
+      .fit-btn { min-width: 52px; padding: 4px 6px; font-size: 10px; }
+      .model-left-overlays {
         top: max(61px, calc(env(safe-area-inset-top) + 61px));
         width: 35vw;
       }
@@ -468,7 +504,7 @@
         font-size: 14px;
         text-overflow: ellipsis;
       }
-      .toolbar { gap: 2px; padding: 3px; }
+      .toolbar { gap: 0; padding: 0; }
       .zoom-btn { min-width: 30px; min-height: 30px; padding: 3px 5px; }
       .fit-btn { min-width: 48px; font-size: 10px; }
       .version-library-toggle,
@@ -481,7 +517,7 @@
       .quick-actions { top: calc(100% + 5px); gap: 4px; }
       .quick-action-btn { min-height: 28px; padding: 4px 7px; font-size: 10px; }
       .quick-actions .rock-zone-btn { top: calc(100% + 4px); }
-      .model-filter-overlay {
+      .model-left-overlays {
         top: max(48px, calc(env(safe-area-inset-top) + 48px));
         left: max(6px, env(safe-area-inset-left));
         max-height: min(68dvh, calc(100dvh - 87px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
@@ -491,6 +527,7 @@
       }
       .model-filter-toggle { min-height: 34px; padding: 6px 9px; font-size: 11.5px; border-radius: 9px; }
       .model-filter-toggle-icon { font-size: 13px; }
+      .records-tab { min-height: 26px; padding: 4px 2px; font-size: 8px; }
       .model-filter-overlay .filter-panel { padding: 8px; border-radius: 9px; }
       .model-filter-overlay .filter-panel h2 { margin-bottom: 6px; font-size: 14px; }
       .model-filter-overlay .model-filter-stack { gap: 5px; }
@@ -525,28 +562,47 @@
               >☾</button>
               <h1 class="model-title">Red de aguas lluvias · AALL</h1>
               <div class="toolbar" aria-label="Controles del diagrama">
-                <button id="zoomOutButton" class="zoom-btn" type="button" aria-label="Alejar">−</button>
                 <button id="fitViewButton" class="zoom-btn fit-btn" type="button">Centrar</button>
-                <button id="zoomInButton" class="zoom-btn" type="button" aria-label="Acercar">+</button>
               </div>
               <div class="quick-actions" aria-label="Registrar información">
                 <button id="openActivityButton" class="zoom-btn quick-action-btn" type="button" aria-label="Registrar actividad">Actividad</button>
                 <button id="toggleCommentModeButton" class="zoom-btn quick-action-btn comment-btn" type="button" aria-label="Registrar comentario" aria-pressed="false">Comentario</button>
               </div>
             </div>
-            <aside id="modelFiltersObject" class="model-filter-object model-filter-overlay" aria-label="Filtros y porcentaje de avance">
-              <button
-                id="modelFiltersToggle"
-                class="model-filter-toggle"
-                type="button"
-                aria-expanded="true"
-                aria-controls="modelFiltersContent"
-              >
-                <span>Filtros y avance</span>
-                <span class="model-filter-toggle-icon" aria-hidden="true">⌄</span>
-              </button>
-              <div id="modelFiltersContent" class="model-filter-content"></div>
-            </aside>
+            <div class="model-left-overlays">
+              <aside id="modelFiltersObject" class="model-filter-object model-filter-overlay" aria-label="Filtros y porcentaje de avance">
+                <button
+                  id="modelFiltersToggle"
+                  class="model-filter-toggle"
+                  type="button"
+                  aria-expanded="true"
+                  aria-controls="modelFiltersContent"
+                >
+                  <span>Filtros y avance</span>
+                  <span class="model-filter-toggle-icon" aria-hidden="true">⌄</span>
+                </button>
+                <div id="modelFiltersContent" class="model-filter-content"></div>
+              </aside>
+              <aside id="modelRecordsObject" class="model-records-overlay" aria-label="Registros de actividades y obstrucciones">
+                <button
+                  id="modelRecordsToggle"
+                  class="model-filter-toggle"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="modelRecordsContent"
+                >
+                  <span>Registros</span>
+                  <span class="model-filter-toggle-icon" aria-hidden="true">⌄</span>
+                </button>
+                <div id="modelRecordsContent" class="model-records-content" hidden>
+                  <div class="records-tabs" role="tablist" aria-label="Tipos de registros">
+                    <button id="recordsActivitiesTab" class="records-tab" type="button" role="tab" aria-selected="true">Actividades</button>
+                    <button id="recordsObstructionsTab" class="records-tab" type="button" role="tab" aria-selected="false">Obstrucciones</button>
+                  </div>
+                  <div id="modelRecordsPanels"></div>
+                </div>
+              </aside>
+            </div>
             <svg id="networkSvg" viewBox="-175 34.53 1157.19 1370.95" preserveAspectRatio="xMidYMid meet" aria-label="Red esquemática desde AutoCAD">
               <g id="baseLinesGroup"></g>
               <g id="segmentGuidesGroup"></g>
@@ -606,6 +662,7 @@
               <foreignObject
                 id="modelActivityObject"
                 class="model-activity-object"
+                visibility="hidden"
                 x="-153.79"
                 y="350"
                 width="240"
@@ -644,6 +701,12 @@
                 const interfaceElement = source?.querySelector('.model-filter-ui');
                 if (content && interfaceElement) content.appendChild(interfaceElement);
                 source?.remove();
+
+                const recordsSource = document.getElementById('modelActivityObject');
+                const recordsPanels = document.getElementById('modelRecordsPanels');
+                const recordsInterface = recordsSource?.querySelector('.model-activity-ui');
+                if (recordsPanels && recordsInterface) recordsPanels.appendChild(recordsInterface);
+                recordsSource?.remove();
               })();
             </script>
             <div id="status"></div>
@@ -1144,8 +1207,6 @@
 
     const svg = document.getElementById("networkSvg");
     const viewport = document.getElementById("networkViewport");
-    const zoomInButton = document.getElementById("zoomInButton");
-    const zoomOutButton = document.getElementById("zoomOutButton");
     const fitViewButton = document.getElementById("fitViewButton");
     const baseLinesGroup = document.getElementById("baseLinesGroup");
     const segmentGuidesGroup = document.getElementById("segmentGuidesGroup");
@@ -1156,9 +1217,12 @@
     const nodesGroup = document.getElementById("nodesGroup");
     const labelsGroup = document.getElementById("labelsGroup");
     const shortSegmentSelectorsGroup = document.getElementById("shortSegmentSelectorsGroup");
-    const modelActivityObject = document.getElementById("modelActivityObject");
     const modelFiltersToggle = document.getElementById("modelFiltersToggle");
     const modelFiltersContent = document.getElementById("modelFiltersContent");
+    const modelRecordsToggle = document.getElementById("modelRecordsToggle");
+    const modelRecordsContent = document.getElementById("modelRecordsContent");
+    const recordsActivitiesTab = document.getElementById("recordsActivitiesTab");
+    const recordsObstructionsTab = document.getElementById("recordsObstructionsTab");
     const status = document.getElementById("status");
     const resetButton = document.getElementById("resetButton");
     const labelsFilterCheckbox = document.getElementById("labelsFilterCheckbox");
@@ -1185,8 +1249,42 @@
         : !window.matchMedia('(max-width: 600px)').matches;
     setModelFiltersOpen(filterPanelInitiallyOpen, false);
     modelFiltersToggle.addEventListener('click', () => {
-      setModelFiltersOpen(modelFiltersToggle.getAttribute('aria-expanded') !== 'true');
+      const nextOpen = modelFiltersToggle.getAttribute('aria-expanded') !== 'true';
+      if (nextOpen && window.matchMedia('(max-width: 600px)').matches) setModelRecordsOpen(false);
+      setModelFiltersOpen(nextOpen);
     });
+
+    function setModelRecordsOpen(open) {
+      const isOpen = Boolean(open);
+      modelRecordsToggle.setAttribute('aria-expanded', String(isOpen));
+      modelRecordsToggle.setAttribute('aria-label', isOpen ? 'Cerrar registros' : 'Abrir registros');
+      modelRecordsContent.hidden = !isOpen;
+    }
+
+    let activeRecordsTab = 'activities';
+    function setActiveRecordsTab(tab) {
+      activeRecordsTab = tab === 'obstructions' ? 'obstructions' : 'activities';
+      const showActivities = activeRecordsTab === 'activities';
+      recordsActivitiesTab.setAttribute('aria-selected', String(showActivities));
+      recordsObstructionsTab.setAttribute('aria-selected', String(!showActivities));
+      const recordsRoot = document.querySelector('#modelRecordsPanels .model-activity-ui');
+      const activitiesPanel = recordsRoot?.querySelector(':scope > .panel:not(.rock-panel)');
+      const obstructionsPanel = recordsRoot?.querySelector(':scope > .rock-panel');
+      if (activitiesPanel) activitiesPanel.hidden = !showActivities;
+      if (obstructionsPanel) obstructionsPanel.hidden = showActivities;
+    }
+
+    setModelRecordsOpen(false);
+    setActiveRecordsTab('activities');
+    modelRecordsToggle.addEventListener('click', () => {
+      const nextOpen = modelRecordsToggle.getAttribute('aria-expanded') !== 'true';
+      if (nextOpen && window.matchMedia('(max-width: 600px)').matches) setModelFiltersOpen(false);
+      setModelRecordsOpen(nextOpen);
+    });
+    recordsActivitiesTab.addEventListener('click', () => setActiveRecordsTab('activities'));
+    recordsObstructionsTab.addEventListener('click', () => setActiveRecordsTab('obstructions'));
+    const recordsPanelObserver = new MutationObserver(() => setActiveRecordsTab(activeRecordsTab));
+    recordsPanelObserver.observe(document.getElementById('modelRecordsPanels'), { childList: true, subtree: true });
 
     const nodeNameModal = document.getElementById("nodeNameModal");
     const nodeNameSubtitle = document.getElementById("nodeNameSubtitle");
@@ -1336,13 +1434,10 @@
 
     const INITIAL_VIEW_BOX = versionBootstrap?.network?.viewBox || { x: -175, y: 34.53, width: 1157.19, height: 1370.95 };
     const DIAGRAM_VIEW_BOX_WIDTH = Number(INITIAL_VIEW_BOX.width) || 1092.19;
-    const MODEL_PANELS_DRAWING_GAP = 80;
-    const leftmostNodeX = Math.min(...nodeDefs.map(node => node.x));
-    const modelPanelsWidth = Number(modelActivityObject.getAttribute('width')) || 240;
-    const modelPanelsX = (leftmostNodeX - MODEL_PANELS_DRAWING_GAP - modelPanelsWidth).toFixed(2);
-    modelActivityObject.setAttribute('x', modelPanelsX);
-    const MIN_VIEW_BOX_WIDTH = DIAGRAM_VIEW_BOX_WIDTH * 0.1536;
+    const MIN_VIEW_BOX_WIDTH = DIAGRAM_VIEW_BOX_WIDTH * 0.1536 * Math.sqrt(0.8) * 0.8;
     const MAX_VIEW_BOX_WIDTH = INITIAL_VIEW_BOX.width * 1.7;
+    const BRANCH_STRETCH_START_RATIO = 0.35;
+    const BRANCH_STRETCH_MAX = 0.35;
     const activePointers = new Map();
     let currentViewBox = { ...INITIAL_VIEW_BOX };
     let panPointerId = null;
@@ -1457,7 +1552,7 @@
       segmentGuidesGroup.appendChild(group);
       if (!hasKnownLength(def)) return group;
 
-      const lens = lengths(def.meters);
+      const lens = def.kind === 'branch' ? [Number(def.meters)] : lengths(def.meters);
       const total = measure.getTotalLength();
       let acc = 0;
       for (let i=0; i<lens.length-1; i++) {
@@ -1476,9 +1571,50 @@
       return group;
     }
 
+    function getBranchStretchFactor() {
+      const widthRatio = currentViewBox.width / INITIAL_VIEW_BOX.width;
+      const minimumRatio = MIN_VIEW_BOX_WIDTH / INITIAL_VIEW_BOX.width;
+      const progress = Math.max(0, Math.min(1,
+        (BRANCH_STRETCH_START_RATIO - widthRatio) / (BRANCH_STRETCH_START_RATIO - minimumRatio)
+      ));
+      return 1 + BRANCH_STRETCH_MAX * progress;
+    }
+
+    function getBranchStretchGeometry(definition) {
+      if (!definition || definition.kind !== 'branch') return null;
+      const fromNode = nodeMap.get(definition.from);
+      const toNode = nodeMap.get(definition.to);
+      if (fromNode?.elementType === 'chamber' && toNode) return { anchor: fromNode, outer: toNode };
+      if (toNode?.elementType === 'chamber' && fromNode) return { anchor: toNode, outer: fromNode };
+      return null;
+    }
+
+    function stretchBranchPoint(definition, point, factor = getBranchStretchFactor()) {
+      const geometry = getBranchStretchGeometry(definition);
+      if (!geometry || factor === 1) return { x: point.x, y: point.y };
+      return {
+        x: geometry.anchor.x + (point.x - geometry.anchor.x) * factor,
+        y: geometry.anchor.y + (point.y - geometry.anchor.y) * factor
+      };
+    }
+
+    function unstretchBranchPoint(definition, point, factor = getBranchStretchFactor()) {
+      const geometry = getBranchStretchGeometry(definition);
+      if (!geometry || factor === 1) return point;
+      return {
+        x: geometry.anchor.x + (point.x - geometry.anchor.x) / factor,
+        y: geometry.anchor.y + (point.y - geometry.anchor.y) / factor
+      };
+    }
+
     function setShortSegmentSelectorTransform(group) {
       const scale = currentViewBox.width / INITIAL_VIEW_BOX.width;
-      group.setAttribute('transform', `translate(${group.dataset.anchorX} ${group.dataset.anchorY}) scale(${scale})`);
+      const definition = lineDefs.find(line => line.id === group.dataset.lineId);
+      const anchor = stretchBranchPoint(definition, {
+        x: Number(group.dataset.anchorX),
+        y: Number(group.dataset.anchorY)
+      });
+      group.setAttribute('transform', `translate(${anchor.x} ${anchor.y}) scale(${scale})`);
     }
 
     function updateShortSegmentSelectorScale() {
@@ -1486,6 +1622,7 @@
     }
 
     function addShortSegmentSelector(state, segmentIndex, startSvgLength, endSvgLength) {
+      if (state.definition.kind === 'branch') return null;
       const segmentLength = Number(state.segmentLengths[segmentIndex]);
       if (!Number.isFinite(segmentLength) || segmentLength >= 4 - 0.000001) return null;
 
@@ -1561,8 +1698,60 @@
       return group;
     }
 
+    function applyBranchStretch() {
+      const factor = getBranchStretchFactor();
+      lineStates.forEach(state => {
+        const geometry = getBranchStretchGeometry(state.definition);
+        if (!geometry) return;
+
+        const { anchor, outer } = geometry;
+        const scaleTransform = factor === 1
+          ? ''
+          : `translate(${anchor.x} ${anchor.y}) scale(${factor}) translate(${-anchor.x} ${-anchor.y})`;
+        [
+          state.basePath,
+          state.fullOverlay,
+          state.hitPath,
+          state.guideGroup,
+          ...state.segmentOverlays
+        ].forEach(element => {
+          if (!element) return;
+          if (scaleTransform) element.setAttribute('transform', scaleTransform);
+          else element.removeAttribute('transform');
+        });
+
+        const outerDx = (outer.x - anchor.x) * (factor - 1);
+        const outerDy = (outer.y - anchor.y) * (factor - 1);
+        if (state.distanceGroup) {
+          const baseTransform = state.distanceGroupBaseTransform || '';
+          state.distanceGroup.setAttribute(
+            'transform',
+            factor === 1
+              ? baseTransform
+              : `translate(${outerDx * 0.5} ${outerDy * 0.5}) ${baseTransform}`.trim()
+          );
+        }
+
+        if (outer.elementType === 'sump') {
+          const nodeElement = nodesGroup.querySelector(`[data-node-id="${outer.id}"]`);
+          const labelElement = labelsGroup.querySelector(`[data-node-id="${outer.id}"]`);
+          const translation = factor === 1 ? '' : `translate(${outerDx} ${outerDy})`;
+          if (nodeElement) {
+            if (translation) nodeElement.setAttribute('transform', translation);
+            else nodeElement.removeAttribute('transform');
+          }
+          if (labelElement) {
+            if (translation) labelElement.setAttribute('transform', translation);
+            else labelElement.removeAttribute('transform');
+          }
+        }
+      });
+      updateShortSegmentSelectorScale();
+    }
+
     function applyViewBox() {
       svg.setAttribute('viewBox', `${currentViewBox.x} ${currentViewBox.y} ${currentViewBox.width} ${currentViewBox.height}`);
+      applyBranchStretch();
       updateGuideVisibility();
     }
 
@@ -1607,7 +1796,7 @@
     function resetView() { currentViewBox = { ...INITIAL_VIEW_BOX }; applyViewBox(); }
 
     function isInteractiveTarget(target) {
-      return Boolean(target.closest('.hit, .node, .node-label, .distance-group, .short-segment-selector, .comment-marker, .zoom-btn, .model-filter-ui, .model-filter-overlay'));
+      return Boolean(target.closest('.hit, .node, .node-label, .distance-group, .short-segment-selector, .comment-marker, .zoom-btn, .model-filter-ui, .model-filter-overlay, .model-records-overlay'));
     }
 
     function markPointerMoved(pointer) {
@@ -1627,8 +1816,6 @@
       let lastEmptyTapX = 0;
       let lastEmptyTapY = 0;
 
-      zoomInButton.addEventListener('click', () => zoomAroundPoint(0.8, { x: currentViewBox.x + currentViewBox.width/2, y: currentViewBox.y + currentViewBox.height/2 }));
-      zoomOutButton.addEventListener('click', () => zoomAroundPoint(1.25, { x: currentViewBox.x + currentViewBox.width/2, y: currentViewBox.y + currentViewBox.height/2 }));
       fitViewButton.addEventListener('click', resetView);
       svg.addEventListener('dblclick', event => event.preventDefault(), { passive:false });
       ['gesturestart', 'gesturechange', 'gestureend'].forEach(type => {
@@ -1685,7 +1872,18 @@
       svg.addEventListener('pointerup', finishPointer);
       svg.addEventListener('pointercancel', finishPointer);
       svg.addEventListener('pointerleave', (event) => { if (activePointers.has(event.pointerId)) finishPointer(event); });
-      svg.addEventListener('wheel', (event) => { event.preventDefault(); zoomAroundPoint(event.deltaY < 0 ? 0.88 : 1.14, clientToSvg(event.clientX, event.clientY)); }, { passive:false });
+      svg.addEventListener('wheel', (event) => {
+        event.preventDefault();
+        const deltaModeScale = event.deltaMode === 1
+          ? 16
+          : event.deltaMode === 2
+            ? viewport.clientHeight
+            : 1;
+        const normalizedDelta = event.deltaY * deltaModeScale;
+        const limitedDelta = Math.max(-120, Math.min(120, normalizedDelta));
+        const factor = Math.exp(limitedDelta * 0.0015);
+        zoomAroundPoint(factor, clientToSvg(event.clientX, event.clientY));
+      }, { passive:false });
       svg.addEventListener('pointerup', (event) => {
         if (commentPlacementMode || event.button !== 0 || event.isPrimary === false || isInteractiveTarget(event.target) || shouldSuppressTap(event)) {
           lastEmptyTapTime = 0;
@@ -1973,6 +2171,31 @@
     }
     function loadActivities() { try { const saved = localStorage.getItem(STORAGE_KEY); const parsed = saved ? JSON.parse(saved) : []; return Array.isArray(parsed) ? parsed : []; } catch { return []; } }
     function saveActivities() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(activities)); } catch {} }
+
+    function normalizeWholeBranchManualActivities(items) {
+      const migratedBranchLines = new Set();
+      return items.flatMap(activity => {
+        if (activity.source !== 'manual' || !Array.isArray(activity.appliedSegments)) return [activity];
+        const branchInfo = activity.appliedSegments.find(segment =>
+          lineStates.get(segment.lineId)?.definition.kind === 'branch'
+        );
+        if (!branchInfo) return [activity];
+        if (migratedBranchLines.has(branchInfo.lineId)) return [];
+
+        const state = lineStates.get(branchInfo.lineId);
+        const totalLength = Number(state?.definition.meters);
+        if (!state || !Number.isFinite(totalLength)) return [activity];
+        migratedBranchLines.add(branchInfo.lineId);
+        return [{
+          ...activity,
+          startCamera: state.definition.from,
+          endCamera: state.definition.to,
+          length: totalLength,
+          appliedLength: totalLength,
+          appliedSegments: [{ lineId: branchInfo.lineId, segmentIndex: 0, segmentLength: totalLength }]
+        }];
+      });
+    }
 
     function findPathBetweenCameras(startCamera, endCamera) {
       const queue = [{ camera:startCamera, path:[] }]; const visited = new Set([startCamera]);
@@ -2400,17 +2623,20 @@
       const branch = def.kind === 'branch';
       const base = E('path', { class: `base-line${branch ? ' branch' : ''}`, d:def.d });
       baseLinesGroup.appendChild(base);
-      const visibleD = visibleLinePath(def);
+      const visibleD = branch ? def.d : visibleLinePath(def);
       const measure = E('path', { class:'measure-path', d:visibleD, fill:'none', stroke:'none' });
       svg.appendChild(measure);
       const total = measure.getTotalLength();
       const knownLength = hasKnownLength(def);
-      const segmentLengths = knownLength ? lengths(def.meters) : [null];
+      const segmentLengths = knownLength
+        ? (branch ? [Number(def.meters)] : lengths(def.meters))
+        : [null];
       const fullOverlay = E('path', { class: `full-overlay${branch ? ' branch' : ''}`, d:visibleD });
       fullLineOverlaysGroup.appendChild(fullOverlay);
       const saved = savedLineSettings[def.id] || {};
       const state = {
         definition:def,
+        basePath:base,
         measurePath:measure,
         totalSvgLength:total,
         segmentLengths,
@@ -2418,8 +2644,10 @@
         activitySegmentCount:segmentLengths.map(()=>0),
         shortSegmentSelectors:[],
         fullOverlay,
+        hitPath:null,
         guideGroup:null,
         distanceGroup:null,
+        distanceGroupBaseTransform:'',
         attributes:{
           identifier: typeof saved.identifier === 'string' ? saved.identifier : (def.identifier || ''),
           diameter: typeof saved.diameter === 'string' ? saved.diameter : ''
@@ -2445,8 +2673,10 @@
 
       const hit = E('path', { class:'hit', d:visibleD });
       lineHitboxesGroup.appendChild(hit);
+      state.hitPath = hit;
       state.guideGroup = addSegmentGuides(measure, def);
       state.distanceGroup = addDistanceLabel(measure, def);
+      state.distanceGroupBaseTransform = state.distanceGroup?.getAttribute('transform') || '';
       lineStates.set(def.id, state);
       let lineTapTimer = null;
       let lastLineTap = 0;
@@ -2454,7 +2684,7 @@
         if (commentPlacementMode) return;
         event.preventDefault();
         if (shouldSuppressTap(event)) return;
-        const point = clientToSvg(event.clientX, event.clientY);
+        const point = unstretchBranchPoint(def, clientToSvg(event.clientX, event.clientY));
         const index = getSegmentIndexAtLength(state, closestLengthOnPath(measure, point));
         const now = Date.now();
         if (now - lastLineTap <= DOUBLE_TAP_DELAY) {
@@ -2605,6 +2835,7 @@
 
         labelsGroup.appendChild(text);
       });
+      if (lineStates.size) applyBranchStretch();
     }
 
     function toggleNode(id) {
@@ -2640,7 +2871,9 @@
     setupZoomPan();
     resetView();
     window.addEventListener('pageshow', resetView);
-    activities = loadActivities().map(a => ({ source:'registered', date:'', ...a }));
+    activities = normalizeWholeBranchManualActivities(
+      loadActivities().map(a => ({ source:'registered', date:'', ...a }))
+    );
     rebuildActivityMarks();
     refreshNodeStates();
     renderActivities();
@@ -2756,10 +2989,11 @@
   const activitiesPanel = document.querySelector('.panel');
   const rockSection = document.createElement('section');
   rockSection.className = 'panel rock-panel';
+  rockSection.hidden = true;
   rockSection.setAttribute('aria-live', 'polite');
   rockSection.innerHTML = `
-    <h2>Zonas rocosas registradas</h2>
-    <p id="rockZonesEmpty" class="rock-empty">Todavía no hay zonas rocosas.</p>
+    <h2>Zonas de obstrucción registradas</h2>
+    <p id="rockZonesEmpty" class="rock-empty">Todavía no hay zonas de obstrucción.</p>
     <div id="rockZonesWrapper" class="table-wrap" style="display:none;">
       <table class="activities rock-zones-table">
         <thead><tr><th>Tramo</th><th></th></tr></thead>
@@ -3520,9 +3754,16 @@ renderComments();
 
   const satelliteLayer = E('g', {
     id: 'satelliteLayerGroup',
-    'clip-path': 'url(#linderoSatelliteClip)',
     opacity: '0.5',
-    'aria-label': 'Imagen satelital dentro del lindero'
+    'aria-label': 'Imagen satelital y fondo ambiental'
+  });
+  const satelliteBackdrop = E('rect', {
+    x: -100000,
+    y: -100000,
+    width: 200000,
+    height: 200000,
+    fill: '#4f704f',
+    'aria-hidden': 'true'
   });
   const satelliteTransform = {
     a: 1.71601668,
@@ -3541,6 +3782,7 @@ renderComments();
     throw new Error('Georreferenciacion rechazada: la transformacion satelital refleja el mapa.');
   }
   const satelliteTiles = E('g', {
+    'clip-path': 'url(#linderoSatelliteClip)',
     transform: `matrix(${satelliteTransform.a} ${satelliteTransform.b} ${satelliteTransform.c} ${satelliteTransform.d} ${satelliteTransform.e} ${satelliteTransform.f})`
   });
   const tileZoom = 19;
@@ -3574,26 +3816,88 @@ renderComments();
   const firstTileY = tileOriginY + Math.floor(minSatelliteLocalY / 256);
   const lastTileY = tileOriginY + Math.floor(maxSatelliteLocalY / 256);
 
+  const satelliteTileUrls = [];
   for (let tileY = firstTileY; tileY <= lastTileY; tileY += 1) {
     for (let tileX = firstTileX; tileX <= lastTileX; tileX += 1) {
+      const tileUrl = `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileZoom}/${tileY}/${tileX}`;
       const image = E('image', {
         x: (tileX - tileOriginX) * 256,
         y: (tileY - tileOriginY) * 256,
         width: 256,
         height: 256,
         preserveAspectRatio: 'none',
-        href: `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileZoom}/${tileY}/${tileX}`
+        href: tileUrl
       });
       image.setAttributeNS(
         'http://www.w3.org/1999/xlink',
         'href',
-        `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileZoom}/${tileY}/${tileX}`
+        tileUrl
       );
       satelliteTiles.appendChild(image);
+      satelliteTileUrls.push(tileUrl);
     }
   }
-  satelliteLayer.appendChild(satelliteTiles);
+  satelliteLayer.append(satelliteBackdrop, satelliteTiles);
   svgElement.insertBefore(satelliteLayer, baseLayer);
+
+  async function detectSatelliteBackdropColor(tileUrls) {
+    const sampleTile = url => new Promise(resolve => {
+      const probe = new Image();
+      probe.crossOrigin = 'anonymous';
+      probe.decoding = 'async';
+      probe.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 24;
+          canvas.height = 24;
+          const context = canvas.getContext('2d', { willReadFrequently: true });
+          context.drawImage(probe, 0, 0, canvas.width, canvas.height);
+          const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+          let red = 0;
+          let green = 0;
+          let blue = 0;
+          let count = 0;
+          for (let index = 0; index < pixels.length; index += 4) {
+            const r = pixels[index];
+            const g = pixels[index + 1];
+            const b = pixels[index + 2];
+            const luminance = (r + g + b) / 3;
+            if (pixels[index + 3] < 200 || luminance < 18 || luminance > 238) continue;
+            red += r;
+            green += g;
+            blue += b;
+            count += 1;
+          }
+          resolve({ red, green, blue, count });
+        } catch {
+          resolve(null);
+        }
+      };
+      probe.onerror = () => resolve(null);
+      probe.src = url;
+    });
+
+    const sampleUrls = tileUrls.length <= 9
+      ? tileUrls
+      : Array.from({ length: 9 }, (_, index) => tileUrls[
+          Math.round(index * (tileUrls.length - 1) / 8)
+        ]);
+    const samples = (await Promise.all(sampleUrls.map(sampleTile))).filter(Boolean);
+    const totals = samples.reduce((result, sample) => ({
+      red: result.red + sample.red,
+      green: result.green + sample.green,
+      blue: result.blue + sample.blue,
+      count: result.count + sample.count
+    }), { red: 0, green: 0, blue: 0, count: 0 });
+    if (!totals.count) return;
+    const channel = value => Math.round(value / totals.count);
+    satelliteBackdrop.setAttribute(
+      'fill',
+      `rgb(${channel(totals.red)}, ${channel(totals.green)}, ${channel(totals.blue)})`
+    );
+  }
+
+  detectSatelliteBackdropColor(satelliteTileUrls);
 
   const linderoGroup = E('g', { id: 'linderoGroup', 'aria-label': 'Lindero georreferenciado' });
   const outline = E('polygon', { class: 'lindero-outline', points: polygonPoints });

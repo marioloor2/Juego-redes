@@ -1,23 +1,34 @@
-# Modelos, versiones y sincronización
+# Proyectos, versiones y sincronización
 
 ## Comportamiento definido
 
 - Cada pulsación de **Guardar nueva versión** crea un registro nuevo.
 - Una versión guardada nunca se modifica.
-- Cada versión conserva el modelo completo: geometría, propiedades, actividades,
+- Cada versión conserva el proyecto completo: geometría, propiedades, actividades,
   zonas rocosas, comentarios y filtros.
 - La fecha y hora de guardado se generan automáticamente.
 - La fecha de corte puede ser distinta de la fecha de guardado.
 - Una versión histórica puede abrirse y utilizarse como origen de otra versión.
 
+## Convención de nombres
+
+Usar el nombre de la obra o urbanización seguido por el tipo de red:
+
+- `Costanera_acacias_AALL`
+- `Costanera_acacias_AASS`
+- `Costanera_acacias_AAPP`
+- `Oryza_AALL`
+- `Oryza_AASS`
+- `Oryza_AAPP`
+
 La biblioteca local utiliza IndexedDB. Los valores antiguos guardados en
-`localStorage` se migran automáticamente a `Modelo de prueba > v001` la primera
+`localStorage` se migran automáticamente a `Proyecto_de_prueba_AALL > v001` la primera
 vez que se abre esta versión de la aplicación.
 
 ## Copias independientes
 
 **Exportar copia** descarga toda la biblioteca en un JSON. Ese archivo permite
-restaurar modelos y versiones aunque el servicio de nube cambie en el futuro.
+restaurar proyectos y versiones aunque el servicio de nube cambie en el futuro.
 
 La importación reemplaza la biblioteca local únicamente después de mostrar una
 confirmación.
@@ -56,7 +67,7 @@ de sesión. Las reglas incluidas permiten a cada cuenta leer y escribir
 
 En el primer dispositivo:
 
-1. Abrir **Modelos y versiones**.
+1. Abrir **Proyectos y versiones**.
 2. Pulsar **Sincronizar**.
 3. Iniciar sesión con Google.
 4. Guardar o sincronizar la biblioteca.
@@ -65,7 +76,7 @@ En otro dispositivo:
 
 1. Abrir la misma aplicación publicada.
 2. Pulsar **Sincronizar** e iniciar sesión con la misma cuenta.
-3. Seleccionar el modelo descargado desde la biblioteca.
+3. Seleccionar el proyecto descargado desde la biblioteca.
 
 Después del primer inicio de sesión, la sesión queda recordada por el navegador.
 Cada nueva versión se intenta subir automáticamente al guardarla. Si la nube no
