@@ -120,7 +120,34 @@
     .filter-row { display: flex; align-items: center; gap: 9px; color: #1f2937; font-size: 14px; font-weight: 700; cursor: pointer; }
     .filter-row input { width: 18px; height: 18px; margin: 0; accent-color: #16a34a; cursor: pointer; }
     .model-filter-object { overflow: visible; }
-    .model-filter-ui { width: 100%; height: 100%; font-family: Arial, sans-serif; pointer-events: auto; }
+    .model-filter-overlay {
+      position: absolute; z-index: 5;
+      top: max(96px, calc(env(safe-area-inset-top) + 96px));
+      left: max(8px, env(safe-area-inset-left));
+      width: clamp(232px, 24vw, 280px);
+      max-width: calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right));
+      max-height: calc(100dvh - 108px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      display: grid; align-content: start; gap: 6px;
+      font-family: Arial, sans-serif; pointer-events: auto;
+      touch-action: pan-y; overscroll-behavior: contain;
+    }
+    .model-filter-toggle {
+      width: 100%; min-height: 42px; padding: 9px 12px;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      border: 1px solid rgba(209,213,219,.95); border-radius: 11px;
+      background: rgba(255,255,255,.97); color: #111827;
+      box-shadow: 0 4px 14px rgba(0,0,0,.13);
+      font-size: 14px; line-height: 1.15; text-align: left;
+    }
+    .model-filter-toggle-icon { font-size: 16px; transition: transform .16s ease; }
+    .model-filter-toggle[aria-expanded="true"] .model-filter-toggle-icon { transform: rotate(180deg); }
+    .model-filter-content {
+      max-height: calc(100dvh - 158px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      overflow-y: auto; padding: 1px 2px 8px 1px;
+      scrollbar-width: thin; -webkit-overflow-scrolling: touch;
+    }
+    .model-filter-content[hidden] { display: none; }
+    .model-filter-ui { width: 100%; height: auto; font-family: Arial, sans-serif; pointer-events: auto; }
     .model-activity-object { overflow: visible; }
     .model-activity-ui {
       width: 100%; height: 100%; padding-right: 3px; overflow-y: auto;
@@ -144,10 +171,36 @@
     .model-filter-panel { margin: 0; width: 100%; box-shadow: 0 5px 16px rgba(0,0,0,.12); }
     .model-filter-stack { display: grid; gap: 8px; }
     .progress-panel { margin-top: 8px; box-shadow: 0 5px 16px rgba(0,0,0,.12); }
-    .progress-list { display: grid; gap: 8px; }
-    .progress-row { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: baseline; color: #1f2937; font-size: 12px; }
-    .progress-label, .progress-value { font-weight: 700; }
-    .progress-value { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .progress-legend {
+      display: flex; flex-wrap: wrap; gap: 5px 10px; margin: -2px 0 10px;
+      color: #64748b; font-size: 10px; font-weight: 700;
+    }
+    .progress-legend-item { display: inline-flex; align-items: center; gap: 4px; }
+    .progress-legend-swatch { width: 8px; height: 8px; border-radius: 50%; background: #16a34a; }
+    .progress-legend-swatch.pending { background: #ef4444; }
+    .progress-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .progress-row {
+      min-width: 0; display: grid; justify-items: center; gap: 7px;
+      color: #1f2937; font-size: 12px; text-align: center;
+    }
+    .progress-label, .progress-value { font-weight: 800; }
+    .progress-label { line-height: 1.15; }
+    .progress-donut {
+      --progress: 0%;
+      position: relative; width: 74px; height: 74px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: conic-gradient(#16a34a var(--progress), #ef4444 0);
+      box-shadow: inset 0 0 0 1px rgba(15,23,42,.08);
+      transition: background .2s ease;
+    }
+    .progress-donut::before {
+      content: ''; position: absolute; inset: 10px; border-radius: 50%;
+      background: rgba(255,255,255,.98); box-shadow: 0 0 0 1px rgba(15,23,42,.06);
+    }
+    .progress-value {
+      position: relative; z-index: 1; color: #111827; font-size: 15px;
+      line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums;
+    }
     .progress-warning { margin: 8px 0 0; color: #92400e; font-size: 10.5px; line-height: 1.35; }
     .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
     .actions button { flex: 1 1 130px; }
@@ -229,6 +282,7 @@
     html[data-theme="night"] .zoom-btn,
     html[data-theme="night"] .quick-action-btn,
     html[data-theme="night"] .theme-toggle-button,
+    html[data-theme="night"] .model-filter-toggle,
     html[data-theme="night"] .version-library-toggle {
       border-color: #475569;
       background: rgba(15,23,42,.96);
@@ -277,6 +331,9 @@
       color: #e2e8f0;
     }
     html[data-theme="night"] .progress-warning { color: #fbbf24; }
+    html[data-theme="night"] .progress-legend { color: #94a3b8; }
+    html[data-theme="night"] .progress-donut::before { background: #0f172a; box-shadow: 0 0 0 1px #334155; }
+    html[data-theme="night"] .progress-value { color: #f8fafc; }
     html[data-theme="night"] .activities-empty,
     html[data-theme="night"] .rock-empty { color: #94a3b8; }
     html[data-theme="night"] .table-wrap,
@@ -397,6 +454,16 @@
       }
       .quick-actions { top: calc(100% + 6px); gap: 5px; }
       .quick-action-btn { min-height: 32px; padding: 5px 8px; font-size: 11px; }
+      .model-filter-overlay {
+        top: max(86px, calc(env(safe-area-inset-top) + 86px));
+        left: max(6px, env(safe-area-inset-left));
+        width: min(252px, calc(100vw - 12px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+        max-height: calc(100dvh - 97px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      }
+      .model-filter-content {
+        max-height: calc(100dvh - 147px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      }
+      .model-filter-toggle { min-height: 38px; padding: 8px 10px; font-size: 13px; }
     }
   </style>
 </head>
@@ -426,6 +493,19 @@
                 <button id="toggleCommentModeButton" class="zoom-btn quick-action-btn comment-btn" type="button" aria-label="Registrar comentario" aria-pressed="false">Comentario</button>
               </div>
             </div>
+            <aside id="modelFiltersObject" class="model-filter-object model-filter-overlay" aria-label="Filtros y porcentaje de avance">
+              <button
+                id="modelFiltersToggle"
+                class="model-filter-toggle"
+                type="button"
+                aria-expanded="true"
+                aria-controls="modelFiltersContent"
+              >
+                <span>Filtros y avance</span>
+                <span class="model-filter-toggle-icon" aria-hidden="true">⌄</span>
+              </button>
+              <div id="modelFiltersContent" class="model-filter-content"></div>
+            </aside>
             <svg id="networkSvg" viewBox="-175 34.53 1157.19 1370.95" preserveAspectRatio="xMidYMid meet" aria-label="Red esquemática desde AutoCAD">
               <g id="baseLinesGroup"></g>
               <g id="segmentGuidesGroup"></g>
@@ -438,8 +518,9 @@
               <g id="shortSegmentSelectorsGroup" class="short-segment-selectors"></g>
 
               <foreignObject
-                id="modelFiltersObject"
+                id="modelFiltersSvgSource"
                 class="model-filter-object"
+                visibility="hidden"
                 x="-153.79"
                 y="44"
                 width="240"
@@ -451,20 +532,28 @@
                     <div class="model-filter-stack">
                       <label class="filter-row" for="labelsFilterCheckbox">
                         <input id="labelsFilterCheckbox" type="checkbox" checked />
-                        <span id="pointCountsText">Cámaras / sumideros / descargas</span>
+                        <span id="pointCountsText">ID Cámaras / Sumideros / Descargas</span>
                       </label>
                     </div>
                   </section>
                   <section class="filter-panel progress-panel" aria-labelledby="progressTitle" aria-live="polite">
                     <h2 id="progressTitle">Porcentaje de avance</h2>
+                    <div class="progress-legend" aria-hidden="true">
+                      <span class="progress-legend-item"><span class="progress-legend-swatch"></span>Avanzado</span>
+                      <span class="progress-legend-item"><span class="progress-legend-swatch pending"></span>Pendiente</span>
+                    </div>
                     <div class="progress-list">
                       <div class="progress-row">
-                        <span class="progress-label">Colectores:</span>
-                        <span id="collectorProgressText" class="progress-value">0 m / 0 m; 0 %</span>
+                        <span class="progress-label">Colectores</span>
+                        <div id="collectorProgressDonut" class="progress-donut" role="img" aria-label="Colectores: 0 % avanzado">
+                          <span id="collectorProgressText" class="progress-value">0%</span>
+                        </div>
                       </div>
                       <div class="progress-row">
-                        <span class="progress-label">Tirantes:</span>
-                        <span id="branchProgressText" class="progress-value">0 m / 0 m; 0 %</span>
+                        <span class="progress-label">Tirantes</span>
+                        <div id="branchProgressDonut" class="progress-donut" role="img" aria-label="Tirantes: 0 % avanzado">
+                          <span id="branchProgressText" class="progress-value">0%</span>
+                        </div>
                       </div>
                     </div>
                     <p id="collectorProgressWarning" class="progress-warning" hidden></p>
@@ -507,6 +596,15 @@
                 </div>
               </foreignObject>
             </svg>
+            <script>
+              (() => {
+                const source = document.getElementById('modelFiltersSvgSource');
+                const content = document.getElementById('modelFiltersContent');
+                const interfaceElement = source?.querySelector('.model-filter-ui');
+                if (content && interfaceElement) content.appendChild(interfaceElement);
+                source?.remove();
+              })();
+            </script>
             <div id="status"></div>
           </div>
         </div>
@@ -1017,12 +1115,37 @@
     const nodesGroup = document.getElementById("nodesGroup");
     const labelsGroup = document.getElementById("labelsGroup");
     const shortSegmentSelectorsGroup = document.getElementById("shortSegmentSelectorsGroup");
-    const modelFiltersObject = document.getElementById("modelFiltersObject");
     const modelActivityObject = document.getElementById("modelActivityObject");
+    const modelFiltersToggle = document.getElementById("modelFiltersToggle");
+    const modelFiltersContent = document.getElementById("modelFiltersContent");
     const status = document.getElementById("status");
     const resetButton = document.getElementById("resetButton");
     const labelsFilterCheckbox = document.getElementById("labelsFilterCheckbox");
     const pointCountsText = document.getElementById("pointCountsText");
+
+    const FILTER_PANEL_DISCLOSURE_KEY = "redVerde_filter_panel_open_v1";
+    function setModelFiltersOpen(open, persist = true) {
+      const isOpen = Boolean(open);
+      modelFiltersToggle.setAttribute('aria-expanded', String(isOpen));
+      modelFiltersToggle.setAttribute('aria-label', isOpen
+        ? 'Cerrar filtros y porcentaje de avance'
+        : 'Abrir filtros y porcentaje de avance');
+      modelFiltersContent.hidden = !isOpen;
+      if (persist) {
+        try { localStorage.setItem(FILTER_PANEL_DISCLOSURE_KEY, isOpen ? 'open' : 'closed'); } catch {}
+      }
+    }
+    let savedFilterPanelState = null;
+    try { savedFilterPanelState = localStorage.getItem(FILTER_PANEL_DISCLOSURE_KEY); } catch {}
+    const filterPanelInitiallyOpen = savedFilterPanelState === 'open'
+      ? true
+      : savedFilterPanelState === 'closed'
+        ? false
+        : !window.matchMedia('(max-width: 600px)').matches;
+    setModelFiltersOpen(filterPanelInitiallyOpen, false);
+    modelFiltersToggle.addEventListener('click', () => {
+      setModelFiltersOpen(modelFiltersToggle.getAttribute('aria-expanded') !== 'true');
+    });
 
     const nodeNameModal = document.getElementById("nodeNameModal");
     const nodeNameSubtitle = document.getElementById("nodeNameSubtitle");
@@ -1057,6 +1180,8 @@
     const toggleAllActivitiesButton = document.getElementById("toggleAllActivitiesButton");
     const groupActivitiesButton = document.getElementById("groupActivitiesButton");
     const groupActivitiesMessage = document.getElementById("groupActivitiesMessage");
+    const collectorProgressDonut = document.getElementById("collectorProgressDonut");
+    const branchProgressDonut = document.getElementById("branchProgressDonut");
     const collectorProgressText = document.getElementById("collectorProgressText");
     const branchProgressText = document.getElementById("branchProgressText");
     const collectorProgressWarning = document.getElementById("collectorProgressWarning");
@@ -1074,9 +1199,8 @@
       }, { chambers: 0, sumps: 0, discharges: 0 });
     }
 
-    const networkInventory = getNetworkInventory();
-    pointCountsText.textContent = `${networkInventory.chambers} cámaras · ${networkInventory.sumps} sumideros · ${networkInventory.discharges} descargas`;
-    pointCountsText.title = `Conteo confirmado: ${networkInventory.sumps} sumideros`;
+    pointCountsText.textContent = 'ID Cámaras / Sumideros / Descargas';
+    pointCountsText.title = 'Mostrar u ocultar los ID de cámaras, sumideros y descargas';
 
     function validateAallModel() {
       const errors = [];
@@ -1173,9 +1297,8 @@
     const DIAGRAM_VIEW_BOX_WIDTH = Number(INITIAL_VIEW_BOX.width) || 1092.19;
     const MODEL_PANELS_DRAWING_GAP = 80;
     const leftmostNodeX = Math.min(...nodeDefs.map(node => node.x));
-    const modelPanelsWidth = Number(modelFiltersObject.getAttribute('width'));
+    const modelPanelsWidth = Number(modelActivityObject.getAttribute('width')) || 240;
     const modelPanelsX = (leftmostNodeX - MODEL_PANELS_DRAWING_GAP - modelPanelsWidth).toFixed(2);
-    modelFiltersObject.setAttribute('x', modelPanelsX);
     modelActivityObject.setAttribute('x', modelPanelsX);
     const MIN_VIEW_BOX_WIDTH = DIAGRAM_VIEW_BOX_WIDTH * 0.1536;
     const MAX_VIEW_BOX_WIDTH = INITIAL_VIEW_BOX.width * 1.7;
@@ -1443,7 +1566,7 @@
     function resetView() { currentViewBox = { ...INITIAL_VIEW_BOX }; applyViewBox(); }
 
     function isInteractiveTarget(target) {
-      return Boolean(target.closest('.hit, .node, .node-label, .distance-group, .short-segment-selector, .comment-marker, .zoom-btn, .model-filter-ui'));
+      return Boolean(target.closest('.hit, .node, .node-label, .distance-group, .short-segment-selector, .comment-marker, .zoom-btn, .model-filter-ui, .model-filter-overlay'));
     }
 
     function markPointerMoved(pointer) {
@@ -1919,16 +2042,22 @@
       };
     }
 
-    function formatProgress(progress) {
-      const knownLabel = progress.missingCount > 0 ? ' conocidos' : '';
-      return `${formatLength(progress.completedLength)} m / ${formatLength(progress.totalLength)} m${knownLabel}; ${formatLength(progress.percentage)} %`;
+    function renderProgressDonut(donut, text, progress, label) {
+      const percentage = Math.max(0, Math.min(100, Math.round(progress.percentage)));
+      const pendingPercentage = 100 - percentage;
+      donut.style.setProperty('--progress', `${percentage}%`);
+      donut.setAttribute(
+        'aria-label',
+        `${label}: ${percentage} % avanzado y ${pendingPercentage} % pendiente${progress.missingCount > 0 ? ' sobre longitudes conocidas' : ''}`
+      );
+      text.textContent = `${percentage}%`;
     }
 
     function updateProgressPanel() {
       const collectorProgress = calculateLineProgress('collector');
       const branchProgress = calculateLineProgress('branch');
-      collectorProgressText.textContent = formatProgress(collectorProgress);
-      branchProgressText.textContent = formatProgress(branchProgress);
+      renderProgressDonut(collectorProgressDonut, collectorProgressText, collectorProgress, 'Colectores');
+      renderProgressDonut(branchProgressDonut, branchProgressText, branchProgress, 'Tirantes');
       collectorProgressWarning.hidden = collectorProgress.missingCount === 0;
       collectorProgressWarning.textContent = collectorProgress.missingCount === 1
         ? 'Falta por definir 1 longitud de colector.'
@@ -2574,17 +2703,15 @@
   rockButton.id = 'openRockZoneButton';
   rockButton.type = 'button';
   rockButton.className = 'rock-zone-btn';
-  rockButton.textContent = 'Registrar zona rocosa';
+  rockButton.textContent = 'Registrar zona de obstrucción';
   actionsBox.appendChild(rockButton);
 
   const filtersStack = document.querySelector('.model-filter-stack');
   const filterLabel = document.createElement('label');
   filterLabel.className = 'filter-row';
   filterLabel.setAttribute('for', 'rockZonesFilterCheckbox');
-  filterLabel.innerHTML = '<input id="rockZonesFilterCheckbox" type="checkbox" checked /><span>Zona rocosa.</span>';
+  filterLabel.innerHTML = '<input id="rockZonesFilterCheckbox" type="checkbox" checked /><span>Zona de obstrucción</span>';
   filtersStack.appendChild(filterLabel);
-  const filtersObject = document.getElementById('modelFiltersObject');
-  if (filtersObject) filtersObject.setAttribute('height', '260');
 
   const activitiesPanel = document.querySelector('.panel');
   const rockSection = document.createElement('section');
@@ -2608,7 +2735,7 @@
   rockModal.setAttribute('aria-hidden', 'true');
   rockModal.innerHTML = `
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="rockZoneTitle">
-      <h2 id="rockZoneTitle">Registrar zona rocosa</h2>
+      <h2 id="rockZoneTitle">Registrar zona de obstrucción</h2>
       <p class="modal-subtitle">Marca un tramo completo entre dos cámaras para señalar suelo duro o roca.</p>
       <form id="rockZoneForm" novalidate>
         <div class="form-grid">
@@ -2616,7 +2743,7 @@
           <div class="form-field"><label for="rockEndCameraInput">Cámara de fin</label><input id="rockEndCameraInput" type="text" placeholder="Ej.: CA2" autocomplete="off" required /></div>
         </div>
         <div id="rockZoneFormError" class="form-error"></div>
-        <div class="modal-actions"><button id="cancelRockZoneButton" class="secondary" type="button">Cancelar</button><button type="submit">Guardar zona rocosa</button></div>
+        <div class="modal-actions"><button id="cancelRockZoneButton" class="secondary" type="button">Cancelar</button><button type="submit">Guardar zona de obstrucción</button></div>
       </form>
     </section>
   `;
@@ -2759,13 +2886,13 @@
     rockZones.forEach(zone => {
       const row = document.createElement('tr');
       const tramo = document.createElement('td');
-      tramo.innerHTML = `<div class="activity-dir">${getNodeDisplayName(zone.startCamera)} → ${getNodeDisplayName(zone.endCamera)}</div><div class="rock-zone-chip">Zona rocosa</div>`;
+      tramo.innerHTML = `<div class="activity-dir">${getNodeDisplayName(zone.startCamera)} → ${getNodeDisplayName(zone.endCamera)}</div><div class="rock-zone-chip">Zona de obstrucción</div>`;
       const action = document.createElement('td');
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'delete-btn';
       del.textContent = '×';
-      del.title = 'Eliminar zona rocosa';
+      del.title = 'Eliminar zona de obstrucción';
       del.addEventListener('click', () => {
         rockZones = rockZones.filter(item => item.id !== zone.id);
         saveRockZones();
@@ -2807,12 +2934,12 @@
     }
     const lineId = getDirectMainLineBetweenCameras(startCamera, endCamera);
     if (!lineId) {
-      rockZoneFormError.textContent = 'Por ahora la zona rocosa debe corresponder a un tramo directo entre dos cámaras consecutivas.';
+      rockZoneFormError.textContent = 'Por ahora la zona de obstrucción debe corresponder a un tramo directo entre dos cámaras consecutivas.';
       return;
     }
     const existing = findRockZoneByLine(lineId);
     if (existing) {
-      rockZoneFormError.textContent = `Ese tramo ya está registrado como zona rocosa.`;
+      rockZoneFormError.textContent = `Ese tramo ya está registrado como zona de obstrucción.`;
       return;
     }
     rockZones.push({
@@ -2934,8 +3061,6 @@
   commentFilterLabel.setAttribute('for', 'commentsFilterCheckbox');
   commentFilterLabel.innerHTML = '<input id="commentsFilterCheckbox" type="checkbox" checked /><span>Comentarios</span>';
   filtersStack.appendChild(commentFilterLabel);
-  const filtersObject = document.getElementById('modelFiltersObject');
-  if (filtersObject) filtersObject.setAttribute('height', '290');
 
   const commentCursor = document.createElement('div');
   commentCursor.className = 'comment-cursor';
@@ -3328,7 +3453,7 @@ renderComments();
 
   const svgElement = document.getElementById('networkSvg');
   const baseLayer = document.getElementById('baseLinesGroup');
-  const filtersLayer = document.getElementById('modelFiltersObject');
+  const frontLayer = document.getElementById('shortSegmentSelectorsGroup');
 
   const defs = E('defs');
   const clipPath = E('clipPath', { id: 'linderoSatelliteClip', clipPathUnits: 'userSpaceOnUse' });
@@ -3435,13 +3560,13 @@ renderComments();
     marker.append(markerTitle, circle, label);
     linderoGroup.appendChild(marker);
   });
-  svgElement.insertBefore(linderoGroup, filtersLayer);
+  svgElement.insertBefore(linderoGroup, frontLayer);
 
   const filtersStack = document.querySelector('.model-filter-stack');
   const linderoFilterLabel = document.createElement('label');
   linderoFilterLabel.className = 'filter-row';
   linderoFilterLabel.setAttribute('for', 'linderoFilterCheckbox');
-  linderoFilterLabel.innerHTML = '<input id="linderoFilterCheckbox" type="checkbox" checked /><span>Lindero y vertices</span>';
+  linderoFilterLabel.innerHTML = '<input id="linderoFilterCheckbox" type="checkbox" checked /><span>Linderos / Perímetro</span>';
 
   const satelliteFilterLabel = document.createElement('label');
   satelliteFilterLabel.className = 'filter-row';
@@ -3458,8 +3583,6 @@ renderComments();
   attribution.innerHTML = 'Imagen: <a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noopener noreferrer">Esri World Imagery</a> y sus proveedores.';
 
   filtersStack.append(linderoFilterLabel, satelliteFilterLabel, opacityControl, attribution);
-  document.getElementById('modelFiltersObject')?.setAttribute('height', '410');
-  document.getElementById('modelActivityObject')?.setAttribute('y', '455');
 
   const linderoCheckbox = document.getElementById('linderoFilterCheckbox');
   const satelliteCheckbox = document.getElementById('satelliteFilterCheckbox');
@@ -3516,8 +3639,7 @@ renderComments();
   // Incluye red, lindero, satelite y paneles al usar el boton Centrar.
   const originalRight = INITIAL_VIEW_BOX.x + INITIAL_VIEW_BOX.width;
   const originalBottom = INITIAL_VIEW_BOX.y + INITIAL_VIEW_BOX.height;
-  const panelsX = Number(document.getElementById('modelFiltersObject')?.getAttribute('x')) || INITIAL_VIEW_BOX.x;
-  const expandedLeft = Math.min(INITIAL_VIEW_BOX.x, satelliteBounds.x, panelsX - 20);
+  const expandedLeft = Math.min(INITIAL_VIEW_BOX.x, satelliteBounds.x);
   const expandedTop = Math.min(INITIAL_VIEW_BOX.y, satelliteBounds.y);
   const expandedRight = Math.max(originalRight, satelliteBounds.x + satelliteBounds.width);
   const expandedBottom = Math.max(originalBottom, satelliteBounds.y + satelliteBounds.height);
