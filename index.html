@@ -16,7 +16,10 @@
   <link rel="stylesheet" href="./version-manager.css?v=2" />
   <style>
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; background: #fafafa; }
+    html {
+      width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; background: #fafafa;
+      -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+    }
     body {
       margin: 0; width: 100%; height: 100%; min-height: 100dvh; overflow: hidden;
       font-family: Arial, sans-serif; background: #fafafa;
@@ -438,32 +441,50 @@
     }
     @media (max-width: 420px) {
       .model-header { top: max(5px, env(safe-area-inset-top)); right: 5px; left: 5px; gap: 5px; }
-      .model-title {
-        max-width: calc(100vw - 242px);
+      .model-header .model-title {
+        max-width: calc(100vw - 226px);
         overflow: hidden;
-        padding: 7px 8px;
-        font-size: 16px;
+        padding: 6px 7px;
+        font-size: 14px;
         text-overflow: ellipsis;
       }
-      .toolbar { gap: 3px; padding: 4px; }
-      .zoom-btn { min-width: 32px; min-height: 32px; padding: 4px 6px; }
-      .fit-btn { min-width: 57px; font-size: 11px; }
+      .toolbar { gap: 2px; padding: 3px; }
+      .zoom-btn { min-width: 30px; min-height: 30px; padding: 3px 5px; }
+      .fit-btn { min-width: 48px; font-size: 10px; }
+      .version-library-toggle,
       .theme-toggle-button {
-        width: 38px; height: 38px; min-width: 38px; min-height: 38px;
-        font-size: 19px;
+        width: 34px; height: 34px; min-width: 34px; min-height: 34px;
       }
-      .quick-actions { top: calc(100% + 6px); gap: 5px; }
-      .quick-action-btn { min-height: 32px; padding: 5px 8px; font-size: 11px; }
+      .theme-toggle-button {
+        font-size: 17px;
+      }
+      .quick-actions { top: calc(100% + 5px); gap: 4px; }
+      .quick-action-btn { min-height: 28px; padding: 4px 7px; font-size: 10px; }
       .model-filter-overlay {
-        top: max(86px, calc(env(safe-area-inset-top) + 86px));
+        top: max(76px, calc(env(safe-area-inset-top) + 76px));
         left: max(6px, env(safe-area-inset-left));
-        width: min(252px, calc(100vw - 12px - env(safe-area-inset-left) - env(safe-area-inset-right)));
-        max-height: calc(100dvh - 97px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+        width: min(210px, calc(100vw - 12px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+        max-height: min(68dvh, calc(100dvh - 87px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
       }
       .model-filter-content {
-        max-height: calc(100dvh - 147px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+        max-height: min(62dvh, calc(100dvh - 129px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
       }
-      .model-filter-toggle { min-height: 38px; padding: 8px 10px; font-size: 13px; }
+      .model-filter-toggle { min-height: 34px; padding: 6px 9px; font-size: 11.5px; border-radius: 9px; }
+      .model-filter-toggle-icon { font-size: 13px; }
+      .model-filter-overlay .filter-panel { padding: 8px; border-radius: 9px; }
+      .model-filter-overlay .filter-panel h2 { margin-bottom: 6px; font-size: 14px; }
+      .model-filter-overlay .model-filter-stack { gap: 5px; }
+      .model-filter-overlay .filter-row { gap: 6px; font-size: 10.5px; line-height: 1.15; }
+      .model-filter-overlay .filter-row input { width: 15px; height: 15px; flex: 0 0 15px; }
+      .model-filter-overlay .progress-panel { margin-top: 5px; }
+      .model-filter-overlay .progress-legend { gap: 4px 7px; margin-bottom: 7px; font-size: 8px; }
+      .model-filter-overlay .progress-legend-swatch { width: 6px; height: 6px; }
+      .model-filter-overlay .progress-list { gap: 5px; }
+      .model-filter-overlay .progress-row { gap: 4px; font-size: 9.5px; }
+      .model-filter-overlay .progress-donut { width: 50px; height: 50px; }
+      .model-filter-overlay .progress-donut::before { inset: 7px; }
+      .model-filter-overlay .progress-value { font-size: 11px; }
+      .model-filter-overlay .progress-warning { margin-top: 5px; font-size: 8px; }
     }
   </style>
 </head>
@@ -3406,6 +3427,15 @@ renderComments();
   }
   html[data-theme="night"] .satellite-opacity-control,
   html[data-theme="night"] .satellite-attribution { color: #cbd5e1; }
+  @media (max-width: 420px) {
+    .model-filter-overlay .satellite-opacity-control {
+      gap: 3px 6px; padding: 1px 0 0 21px; font-size: 9px;
+    }
+    .model-filter-overlay .satellite-opacity-control input { height: 14px; }
+    .model-filter-overlay .satellite-attribution {
+      margin: 1px 0 0 21px; font-size: 7.5px; line-height: 1.15;
+    }
+  }
 </style>
 <script>
 (function() {
