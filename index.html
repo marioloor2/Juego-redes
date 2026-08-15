@@ -3895,7 +3895,7 @@ renderComments();
   // Este lindero pertenece al modelo incorporado Costanera_acacias_AALL.
   if (!nodeMap.has('CAM_AL_24')) return;
 
-  const LINDERO_LAYER_SETTINGS_KEY = 'redVerde_costanera_lindero_layers_v1';
+  const LINDERO_LAYER_SETTINGS_KEY = 'redVerde_costanera_lindero_layers_v2';
   // Vertices reconstruidos en el mismo marco CAD de la red a partir del PDF
   // conjunto. Las coordenadas UTM se conservan como fuente geodesica.
   const linderoPoints = [
@@ -4050,7 +4050,7 @@ renderComments();
   const linderoFilterLabel = document.createElement('label');
   linderoFilterLabel.className = 'filter-row';
   linderoFilterLabel.setAttribute('for', 'linderoFilterCheckbox');
-  linderoFilterLabel.innerHTML = '<input id="linderoFilterCheckbox" type="checkbox" checked /><span>Linderos / Perímetro</span>';
+  linderoFilterLabel.innerHTML = '<input id="linderoFilterCheckbox" type="checkbox" /><span>Linderos / Perímetro</span>';
 
   const satelliteFilterLabel = document.createElement('label');
   satelliteFilterLabel.className = 'filter-row';
@@ -4102,7 +4102,7 @@ renderComments();
   }
 
   const savedSettings = loadLayerSettings();
-  linderoCheckbox.checked = savedSettings.showLindero !== false;
+  linderoCheckbox.checked = savedSettings.showLindero === true;
   satelliteCheckbox.checked = savedSettings.showSatellite !== false;
   opacityRange.value = Number.isFinite(Number(savedSettings.satelliteOpacity))
     ? String(Math.round(Math.max(0, Math.min(1, Number(savedSettings.satelliteOpacity))) * 100))
