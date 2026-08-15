@@ -412,10 +412,10 @@
       color: #dbeafe;
     }
     html[data-theme="night"] .comment-marker-bg {
-      fill: #0f172a;
-      stroke: #60a5fa;
+      fill: #f97316;
+      stroke: #9a3412;
     }
-    html[data-theme="night"] .comment-marker-icon { fill: #93c5fd; }
+    html[data-theme="night"] .comment-marker-icon { fill: #fff; }
     html[data-theme="night"] .version-library {
       background: #0b1220;
       color: #f8fafc;
@@ -806,6 +806,7 @@
   <script>
     const SVG_NS = "http://www.w3.org/2000/svg";
     const STORAGE_KEY = "redVerde_autocad_pdf_distancias_reales_v1";
+    const ACTIVITY_SEGMENT_ORDER_VERSION = 1;
     const LINE_SETTINGS_KEY = "redVerde_autocad_line_settings_v1";
     const NODE_SETTINGS_KEY = "redVerde_autocad_node_settings_v1";
     const FILTER_SETTINGS_KEY = "redVerde_autocad_filter_settings_v1";
@@ -878,6 +879,12 @@
         oneTotalLengthLabelPerLine: true,
         labelEveryTubeModule: false,
         tubeDivisionGuidesVisibleOnZoom: true
+      }),
+      constructionRules: Object.freeze({
+        startsAtDischarge: true,
+        direction: 'downstream-to-upstream',
+        fullTubeAtDownstreamEnd: true,
+        remainderPlacement: 'upstream-end'
       }),
       elementRules: Object.freeze({
         collector: Object.freeze({ geometry: 'line', lengthRequired: true, diameterRequired: false, identifierRequired: false, labelRules: AALL_PIPE_LABEL_RULES }),
@@ -1125,6 +1132,41 @@
           line.flowDirectionSource = 'cad-arrow';
         }
       });
+
+      // La construccion de AALL empieza en cada descarga y avanza aguas arriba.
+      // Completa la direccion de flujo de los colectores por topologia para que
+      // la modulacion de 6 m no dependa del orden arbitrario del trazado CAD.
+      const collectorLinesByNode = new Map();
+      lineDefs.filter(line => line.elementType === 'collector').forEach(line => {
+        [line.from, line.to].forEach(nodeId => {
+          if (!collectorLinesByNode.has(nodeId)) collectorLinesByNode.set(nodeId, []);
+          collectorLinesByNode.get(nodeId).push(line);
+        });
+      });
+      const downstreamQueue = nodeDefs
+        .filter(node => node.elementType === 'discharge')
+        .map(node => node.id);
+      const visitedCollectorLines = new Set();
+      const visitedDownstreamNodes = new Set(downstreamQueue);
+      while (downstreamQueue.length) {
+        const downstreamNodeId = downstreamQueue.shift();
+        (collectorLinesByNode.get(downstreamNodeId) || []).forEach(line => {
+          if (visitedCollectorLines.has(line.id)) return;
+          visitedCollectorLines.add(line.id);
+          const upstreamNodeId = line.from === downstreamNodeId ? line.to : line.from;
+          if (!line.flowFrom || !line.flowTo) {
+            line.flowFrom = upstreamNodeId;
+            line.flowTo = downstreamNodeId;
+            line.flowDirectionSource = 'gravity-topology';
+          } else if (line.flowTo !== downstreamNodeId) {
+            line.flowConflict = true;
+          }
+          if (!visitedDownstreamNodes.has(upstreamNodeId)) {
+            visitedDownstreamNodes.add(upstreamNodeId);
+            downstreamQueue.push(upstreamNodeId);
+          }
+        });
+      }
 
       const normalizedRouteEdges = lineDefs
         .filter(line =>
@@ -1438,6 +1480,7 @@
     const MAX_VIEW_BOX_WIDTH = INITIAL_VIEW_BOX.width * 1.7;
     const BRANCH_STRETCH_START_RATIO = 0.35;
     const BRANCH_STRETCH_MAX = 0.35;
+    const DISCHARGE_HEADWALL_OFFSET = 13;
     const activePointers = new Map();
     let currentViewBox = { ...INITIAL_VIEW_BOX };
     let panPointerId = null;
@@ -1461,6 +1504,21 @@
       if (remainder > 0.000001) result.push(remainder);
       if (!result.length) result.push(total);
       return result;
+    }
+
+    function collectorSegmentsRunAgainstPath(definition) {
+      if (definition?.elementType !== 'collector') return false;
+      const downstreamNodeId = definition.flowTo
+        || ([definition.from, definition.to].find(nodeId =>
+          nodeMap.get(nodeId)?.elementType === 'discharge'
+        ) || null);
+      return downstreamNodeId === definition.to;
+    }
+
+    function segmentLengthsForLine(definition) {
+      if (definition.kind === 'branch') return [Number(definition.meters)];
+      const modules = lengths(definition.meters);
+      return collectorSegmentsRunAgainstPath(definition) ? modules.reverse() : modules;
     }
 
     function poly(measure, startLen, endLen, overlap=0.8) {
@@ -1975,6 +2033,7 @@
       return {
         id: (crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`),
         source: 'manual',
+        segmentOrderVersion: ACTIVITY_SEGMENT_ORDER_VERSION,
         startCamera: endpoints.start,
         endCamera: endpoints.end,
         length: segmentLength,
@@ -2194,6 +2253,33 @@
           appliedLength: totalLength,
           appliedSegments: [{ lineId: branchInfo.lineId, segmentIndex: 0, segmentLength: totalLength }]
         }];
+      });
+    }
+
+    function normalizeConstructionOrderActivities(items) {
+      return items.map(activity => {
+        if (Number(activity.segmentOrderVersion) >= ACTIVITY_SEGMENT_ORDER_VERSION) return activity;
+        const appliedSegments = Array.isArray(activity.appliedSegments)
+          ? activity.appliedSegments.map(segment => {
+              const state = lineStates.get(segment.lineId);
+              const definition = state?.definition;
+              if (!state || !collectorSegmentsRunAgainstPath(definition)) return { ...segment };
+              const oldIndex = Number(segment.segmentIndex);
+              if (!Number.isInteger(oldIndex)) return { ...segment };
+              const newIndex = state.segmentLengths.length - 1 - oldIndex;
+              if (newIndex < 0 || newIndex >= state.segmentLengths.length) return { ...segment };
+              return {
+                ...segment,
+                segmentIndex: newIndex,
+                segmentLength: state.segmentLengths[newIndex]
+              };
+            })
+          : activity.appliedSegments;
+        return {
+          ...activity,
+          segmentOrderVersion: ACTIVITY_SEGMENT_ORDER_VERSION,
+          appliedSegments
+        };
       });
     }
 
@@ -2595,7 +2681,7 @@
 
       const result = computeAppliedSegments(startCamera, endCamera, lengthValue);
       if (!result.ok) { activityFormError.textContent = result.message; return; }
-      activities.push({ id: (crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`), source:'registered', startCamera, endCamera, length:Number(lengthValue.toFixed(2)), appliedLength:result.appliedLength, appliedSegments:result.appliedSegments, date });
+      activities.push({ id: (crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`), source:'registered', segmentOrderVersion:ACTIVITY_SEGMENT_ORDER_VERSION, startCamera, endCamera, length:Number(lengthValue.toFixed(2)), appliedLength:result.appliedLength, appliedSegments:result.appliedSegments, date });
       saveActivities(); rebuildActivityMarks(); renderActivities(); closeActivityModal();
     }
 
@@ -2621,16 +2707,17 @@
 
     function buildLine(def) {
       const branch = def.kind === 'branch';
+      const connectsDischarge = [def.from, def.to].some(nodeId =>
+        nodeMap.get(nodeId)?.elementType === 'discharge'
+      );
       const base = E('path', { class: `base-line${branch ? ' branch' : ''}`, d:def.d });
       baseLinesGroup.appendChild(base);
-      const visibleD = branch ? def.d : visibleLinePath(def);
+      const visibleD = branch || connectsDischarge ? def.d : visibleLinePath(def);
       const measure = E('path', { class:'measure-path', d:visibleD, fill:'none', stroke:'none' });
       svg.appendChild(measure);
       const total = measure.getTotalLength();
       const knownLength = hasKnownLength(def);
-      const segmentLengths = knownLength
-        ? (branch ? [Number(def.meters)] : lengths(def.meters))
-        : [null];
+      const segmentLengths = knownLength ? segmentLengthsForLine(def) : [null];
       const fullOverlay = E('path', { class: `full-overlay${branch ? ' branch' : ''}`, d:visibleD });
       fullLineOverlaysGroup.appendChild(fullOverlay);
       const saved = savedLineSettings[def.id] || {};
@@ -2711,16 +2798,31 @@
       });
     }
 
-    function getDischargeRotation(node) {
+    function getDischargeDirection(node) {
       const collector = lineDefs.find(line =>
         line.elementType === 'collector' && (line.from === node.id || line.to === node.id)
       );
-      if (!collector) return 0;
+      if (!collector) return { x: 0, y: 1 };
       const otherNodeId = collector.from === node.id ? collector.to : collector.from;
       const otherNode = nodeMap.get(otherNodeId);
-      if (!otherNode) return 0;
-      const incomingAngle = Math.atan2(otherNode.y - node.y, otherNode.x - node.x) * 180 / Math.PI;
-      return incomingAngle - 90;
+      if (!otherNode) return { x: 0, y: 1 };
+      const dx = otherNode.x - node.x;
+      const dy = otherNode.y - node.y;
+      const length = Math.hypot(dx, dy) || 1;
+      return { x: dx / length, y: dy / length };
+    }
+
+    function getDischargeVisualPoint(node) {
+      const direction = getDischargeDirection(node);
+      return {
+        x: node.x - direction.x * DISCHARGE_HEADWALL_OFFSET,
+        y: node.y - direction.y * DISCHARGE_HEADWALL_OFFSET
+      };
+    }
+
+    function getDischargeRotation(node) {
+      const direction = getDischargeDirection(node);
+      return Math.atan2(direction.y, direction.x) * 180 / Math.PI - 90;
     }
 
     function buildNodes() {
@@ -2737,12 +2839,13 @@
             rx: 1.2
           });
         } else if (n.elementType === 'discharge') {
+          const visualPoint = getDischargeVisualPoint(n);
           nodeContainer = E('g', {
             class: 'headwall-anchor',
-            transform: `translate(${n.x} ${n.y}) rotate(${getDischargeRotation(n)})`
+            transform: `translate(${visualPoint.x} ${visualPoint.y}) rotate(${getDischargeRotation(n)})`
           });
           shape = E('g', { class: 'node discharge' });
-          shape.appendChild(E('circle', { class: 'headwall-hit', cx: 0, cy: -1, r: 18 }));
+          shape.appendChild(E('circle', { class: 'headwall-hit', cx: 0, cy: -9, r: 8 }));
           shape.appendChild(E('path', {
             class: 'headwall-shape',
             d: 'M -17 -11 L -11 0 L 11 0 L 17 -11 M -2.4 0 L -2.4 9 M 2.4 0 L 2.4 9'
@@ -2778,22 +2881,101 @@
 
     function placeLabels() {
       labelsGroup.innerHTML = '';
+      const placedLabelBounds = [];
+      const intersects = (a, b, padding = 0) => !(
+        a.right + padding < b.left || a.left - padding > b.right
+        || a.bottom + padding < b.top || a.top - padding > b.bottom
+      );
+      const boundsAt = (x, y, textValue, elementType) => {
+        const fontSize = elementType === 'chamber' ? 16 : 11;
+        const width = Math.max(fontSize * 1.6, textValue.length * fontSize * 0.62);
+        const height = fontSize * 1.25;
+        return {
+          left: x - width / 2,
+          right: x + width / 2,
+          top: y - height / 2,
+          bottom: y + height / 2
+        };
+      };
+      const scoreLabelPosition = (candidateBounds, nodeId) => {
+        let score = 0;
+        placedLabelBounds.forEach(bounds => {
+          if (intersects(candidateBounds, bounds, 5)) score += 500;
+        });
+        nodeDefs.forEach(node => {
+          if (node.id === nodeId) return;
+          const radius = Math.max(8, Number(node.radius) || 0);
+          const nodeBounds = {
+            left: node.x - radius,
+            right: node.x + radius,
+            top: node.y - radius,
+            bottom: node.y + radius
+          };
+          if (intersects(candidateBounds, nodeBounds, 5)) score += 120;
+        });
+        lineStates.forEach(state => {
+          const path = state.measurePath;
+          const total = path.getTotalLength();
+          const step = Math.max(8, total / 90);
+          for (let length = 0; length <= total; length += step) {
+            const point = path.getPointAtLength(length);
+            if (
+              point.x >= candidateBounds.left - 5 && point.x <= candidateBounds.right + 5
+              && point.y >= candidateBounds.top - 5 && point.y <= candidateBounds.bottom + 5
+            ) score += 8;
+          }
+          const distanceText = state.distanceGroup?.querySelector('.distance-text');
+          if (distanceText) {
+            const x = Number(distanceText.getAttribute('x'));
+            const y = Number(distanceText.getAttribute('y'));
+            if (
+              x >= candidateBounds.left - 14 && x <= candidateBounds.right + 14
+              && y >= candidateBounds.top - 10 && y <= candidateBounds.bottom + 10
+            ) score += 180;
+          }
+        });
+        return score;
+      };
+
       nodeDefs.forEach(n => {
         if (n.showLabel === false) return;
         if (!n.identifierRequired && !n.displayName) return;
         let x = n.x, y = n.y;
         const cls = n.elementType;
+        const labelValue = n.displayName || n.id;
         if (n.elementType === 'chamber') {
           const candidates = [[42,-26],[44,22],[-42,-26],[-44,22],[0,-36],[0,36]];
           let best = candidates[0], score = 1e9;
           for (const [dx,dy] of candidates) {
             const bx = x + dx, by = y + dy;
-            let sc = 0;
-            nodeDefs.forEach(m => { if (m.id !== n.id && Math.hypot(bx - m.x, by - m.y) < 28) sc += 100; });
-            lineStates.forEach(st => { const t = st.measurePath.getTotalLength(); for (let l=0; l<t; l+=10) { const p = st.measurePath.getPointAtLength(l); if (Math.hypot(bx - p.x, by - p.y) < 18) sc += 6; } });
+            const sc = scoreLabelPosition(boundsAt(bx, by, labelValue, cls), n.id);
             if (sc < score) { score = sc; best = [dx,dy]; }
           }
           x += best[0]; y += best[1];
+        } else if (n.elementType === 'discharge') {
+          const direction = getDischargeDirection(n);
+          const normal = { x: -direction.y, y: direction.x };
+          const visualPoint = getDischargeVisualPoint(n);
+          const candidates = [
+            { x: visualPoint.x - normal.x * 32, y: visualPoint.y - normal.y * 32 },
+            { x: visualPoint.x + normal.x * 32, y: visualPoint.y + normal.y * 32 },
+            { x: visualPoint.x - direction.x * 20 - normal.x * 25, y: visualPoint.y - direction.y * 20 - normal.y * 25 },
+            { x: visualPoint.x - direction.x * 20 + normal.x * 25, y: visualPoint.y - direction.y * 20 + normal.y * 25 }
+          ];
+          let best = candidates[0];
+          let bestScore = Infinity;
+          candidates.forEach(candidate => {
+            const candidateScore = scoreLabelPosition(
+              boundsAt(candidate.x, candidate.y, labelValue, cls),
+              n.id
+            );
+            if (candidateScore < bestScore) {
+              best = candidate;
+              bestScore = candidateScore;
+            }
+          });
+          x = best.x;
+          y = best.y;
         } else {
           const p = nodeMap.get(n.parent) || { x: x - 1, y }; const dx = x - p.x, dy = y - p.y; const len = Math.hypot(dx,dy) || 1;
           x += dx / len * 24; y += dy / len * 16;
@@ -2806,7 +2988,8 @@
           role: 'button',
           'aria-label': `Editar nombre de ${n.displayName || n.id}`
         });
-        text.textContent = n.displayName || n.id;
+        text.textContent = labelValue;
+        placedLabelBounds.push(boundsAt(x, y, labelValue, cls));
 
         let labelTapTimer = null;
         let lastLabelTap = 0;
@@ -2871,9 +3054,12 @@
     setupZoomPan();
     resetView();
     window.addEventListener('pageshow', resetView);
-    activities = normalizeWholeBranchManualActivities(
-      loadActivities().map(a => ({ source:'registered', date:'', ...a }))
+    activities = normalizeConstructionOrderActivities(
+      normalizeWholeBranchManualActivities(
+        loadActivities().map(a => ({ source:'registered', date:'', ...a }))
+      )
     );
+    saveActivities();
     rebuildActivityMarks();
     refreshNodeStates();
     renderActivities();
@@ -3303,11 +3489,11 @@
   }
   .comment-marker { cursor: pointer; outline: none; }
   .comment-marker-hit { fill: transparent; pointer-events: all; }
-  .comment-marker-bg { fill: #fff; stroke: #2563eb; stroke-width: 2; pointer-events: none; }
+  .comment-marker-bg { fill: #f97316; stroke: #9a3412; stroke-width: 3; pointer-events: none; }
   .comment-marker-icon {
-    fill: #1d4ed8;
+    fill: #fff;
     font-family: "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
-    font-size: 17px;
+    font-size: 34px;
     text-anchor: middle;
     dominant-baseline: middle;
     pointer-events: none;
@@ -3429,8 +3615,19 @@
   }
 
   function setCommentMarkerTransform(group) {
-    const scale = currentViewBox.width / INITIAL_VIEW_BOX.width;
+    const viewRatio = currentViewBox.width / INITIAL_VIEW_BOX.width;
+    const minimumRatio = MIN_VIEW_BOX_WIDTH / INITIAL_VIEW_BOX.width;
+    const maximumZoomLog = Math.log(1 / minimumRatio);
+    const zoomProgress = maximumZoomLog > 0
+      ? Math.max(0, Math.min(1, Math.log(1 / viewRatio) / maximumZoomLog))
+      : 0;
+    const growthProgress = Math.max(0, Math.min(1, (zoomProgress - 0.6) / 0.4));
+    const smoothGrowth = growthProgress * growthProgress * (3 - 2 * growthProgress);
+    const progressiveGrowth = 1 + 2 * smoothGrowth;
+    const scale = viewRatio * progressiveGrowth;
     group.setAttribute('transform', `translate(${group.dataset.x} ${group.dataset.y}) scale(${scale})`);
+    const hit = group.querySelector('.comment-marker-hit');
+    if (hit) hit.setAttribute('transform', `scale(${1 / Math.sqrt(progressiveGrowth)})`);
   }
 
   function updateCommentMarkerScale() {
@@ -3467,8 +3664,8 @@
       });
       group.dataset.x = Number(comment.x).toFixed(2);
       group.dataset.y = Number(comment.y).toFixed(2);
-      const hit = E('circle', { class:'comment-marker-hit', cx:0, cy:0, r:22 });
-      const background = E('circle', { class:'comment-marker-bg', cx:0, cy:0, r:14 });
+      const hit = E('circle', { class:'comment-marker-hit', cx:0, cy:0, r:30 });
+      const background = E('circle', { class:'comment-marker-bg', cx:0, cy:0, r:28 });
       const icon = E('text', { class:'comment-marker-icon', x:0, y:1 });
       icon.textContent = '💬';
       const open = event => {
@@ -3719,7 +3916,7 @@ renderComments();
   }));
   const polygonPoints = linderoPoints.map(point => `${point.x},${point.y}`).join(' ');
   const drawingUnitsPerMeter = 5.7530408;
-  const satelliteMargin = 5 * drawingUnitsPerMeter;
+  const satelliteMargin = 20 * drawingUnitsPerMeter;
   const satelliteExtentPoints = [
     ...linderoPoints,
     ...nodeDefs
@@ -3754,16 +3951,9 @@ renderComments();
 
   const satelliteLayer = E('g', {
     id: 'satelliteLayerGroup',
+    'clip-path': 'url(#linderoSatelliteClip)',
     opacity: '0.5',
-    'aria-label': 'Imagen satelital y fondo ambiental'
-  });
-  const satelliteBackdrop = E('rect', {
-    x: -100000,
-    y: -100000,
-    width: 200000,
-    height: 200000,
-    fill: '#4f704f',
-    'aria-hidden': 'true'
+    'aria-label': 'Imagen satelital dentro del rectángulo de cobertura'
   });
   const satelliteTransform = {
     a: 1.71601668,
@@ -3782,14 +3972,13 @@ renderComments();
     throw new Error('Georreferenciacion rechazada: la transformacion satelital refleja el mapa.');
   }
   const satelliteTiles = E('g', {
-    'clip-path': 'url(#linderoSatelliteClip)',
     transform: `matrix(${satelliteTransform.a} ${satelliteTransform.b} ${satelliteTransform.c} ${satelliteTransform.d} ${satelliteTransform.e} ${satelliteTransform.f})`
   });
   const tileZoom = 19;
   const tileOriginX = 145530;
   const tileOriginY = 265371;
   // Carga todos los mosaicos que intersectan el rectangulo calculado con los
-  // extremos de red/lindero y su margen de 5 m; no depende de un rango fijo.
+  // extremos de red/lindero y su margen de 20 m; no depende de un rango fijo.
   const satelliteBoundsCorners = [
     { x: satelliteBounds.x, y: satelliteBounds.y },
     { x: satelliteBounds.x + satelliteBounds.width, y: satelliteBounds.y },
@@ -3816,7 +4005,6 @@ renderComments();
   const firstTileY = tileOriginY + Math.floor(minSatelliteLocalY / 256);
   const lastTileY = tileOriginY + Math.floor(maxSatelliteLocalY / 256);
 
-  const satelliteTileUrls = [];
   for (let tileY = firstTileY; tileY <= lastTileY; tileY += 1) {
     for (let tileX = firstTileX; tileX <= lastTileX; tileX += 1) {
       const tileUrl = `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileZoom}/${tileY}/${tileX}`;
@@ -3834,70 +4022,10 @@ renderComments();
         tileUrl
       );
       satelliteTiles.appendChild(image);
-      satelliteTileUrls.push(tileUrl);
     }
   }
-  satelliteLayer.append(satelliteBackdrop, satelliteTiles);
+  satelliteLayer.appendChild(satelliteTiles);
   svgElement.insertBefore(satelliteLayer, baseLayer);
-
-  async function detectSatelliteBackdropColor(tileUrls) {
-    const sampleTile = url => new Promise(resolve => {
-      const probe = new Image();
-      probe.crossOrigin = 'anonymous';
-      probe.decoding = 'async';
-      probe.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = 24;
-          canvas.height = 24;
-          const context = canvas.getContext('2d', { willReadFrequently: true });
-          context.drawImage(probe, 0, 0, canvas.width, canvas.height);
-          const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-          let red = 0;
-          let green = 0;
-          let blue = 0;
-          let count = 0;
-          for (let index = 0; index < pixels.length; index += 4) {
-            const r = pixels[index];
-            const g = pixels[index + 1];
-            const b = pixels[index + 2];
-            const luminance = (r + g + b) / 3;
-            if (pixels[index + 3] < 200 || luminance < 18 || luminance > 238) continue;
-            red += r;
-            green += g;
-            blue += b;
-            count += 1;
-          }
-          resolve({ red, green, blue, count });
-        } catch {
-          resolve(null);
-        }
-      };
-      probe.onerror = () => resolve(null);
-      probe.src = url;
-    });
-
-    const sampleUrls = tileUrls.length <= 9
-      ? tileUrls
-      : Array.from({ length: 9 }, (_, index) => tileUrls[
-          Math.round(index * (tileUrls.length - 1) / 8)
-        ]);
-    const samples = (await Promise.all(sampleUrls.map(sampleTile))).filter(Boolean);
-    const totals = samples.reduce((result, sample) => ({
-      red: result.red + sample.red,
-      green: result.green + sample.green,
-      blue: result.blue + sample.blue,
-      count: result.count + sample.count
-    }), { red: 0, green: 0, blue: 0, count: 0 });
-    if (!totals.count) return;
-    const channel = value => Math.round(value / totals.count);
-    satelliteBackdrop.setAttribute(
-      'fill',
-      `rgb(${channel(totals.red)}, ${channel(totals.green)}, ${channel(totals.blue)})`
-    );
-  }
-
-  detectSatelliteBackdropColor(satelliteTileUrls);
 
   const linderoGroup = E('g', { id: 'linderoGroup', 'aria-label': 'Lindero georreferenciado' });
   const outline = E('polygon', { class: 'lindero-outline', points: polygonPoints });
