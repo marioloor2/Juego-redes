@@ -50,6 +50,25 @@
     }
     .zoom-btn { min-width: 34px; min-height: 34px; padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: #111; font-size: 18px; line-height: 1; cursor: pointer; }
     .fit-btn { min-width: 62px; font-size: 12px; }
+    .save-version-btn {
+      position: relative; display: grid; width: 34px; height: 34px; min-width: 34px; min-height: 34px;
+      place-items: center; padding: 0; transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
+    }
+    .save-version-btn svg { width: 18px; height: 18px; fill: currentColor; }
+    .save-version-btn .save-version-check { display: none; font-size: 20px; font-weight: 800; }
+    .save-version-btn[data-state="saving"] svg { visibility: hidden; }
+    .save-version-btn[data-state="saving"]::after {
+      position: absolute; width: 14px; height: 14px; border: 2px solid rgba(17,24,39,.25);
+      border-top-color: currentColor; border-radius: 50%; content: ""; animation: save-spin .7s linear infinite;
+    }
+    .save-version-btn[data-state="success"] {
+      border-color: #15803d; background: #16a34a; color: #fff; transform: scale(1.04);
+    }
+    .save-version-btn[data-state="success"] svg { display: none; }
+    .save-version-btn[data-state="success"] .save-version-check { display: block; }
+    .save-version-btn[data-state="error"] { border-color: #dc2626; color: #dc2626; }
+    .save-version-btn:disabled { cursor: wait; opacity: .82; }
+    @keyframes save-spin { to { transform: rotate(360deg); } }
     .theme-toggle-button {
       flex: 0 0 auto; width: 42px; height: 42px; min-width: 42px; min-height: 42px;
       padding: 0; border: 1px solid rgba(209,213,219,.95); border-radius: 11px;
@@ -507,6 +526,8 @@
       .toolbar { gap: 0; padding: 0; }
       .zoom-btn { min-width: 30px; min-height: 30px; padding: 3px 5px; }
       .fit-btn { min-width: 48px; font-size: 10px; }
+      .save-version-btn { width: 28px; height: 28px; min-width: 28px; min-height: 28px; padding: 0; }
+      .save-version-btn svg { width: 16px; height: 16px; }
       .version-library-toggle,
       .theme-toggle-button {
         width: 34px; height: 34px; min-width: 34px; min-height: 34px;
@@ -567,6 +588,20 @@
               <div class="quick-actions" aria-label="Registrar información">
                 <button id="openActivityButton" class="zoom-btn quick-action-btn" type="button" aria-label="Registrar actividad">Actividad</button>
                 <button id="toggleCommentModeButton" class="zoom-btn quick-action-btn comment-btn" type="button" aria-label="Registrar comentario" aria-pressed="false">Comentario</button>
+                <button
+                  id="saveVersionButton"
+                  class="zoom-btn quick-action-btn save-version-btn"
+                  type="button"
+                  data-state="idle"
+                  aria-label="Guardar nueva versión"
+                  title="Guardar nueva versión"
+                  disabled
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 3h13.6L21 6.4V21H3V4a1 1 0 0 1 1-1Zm2 2v5h10V5H6Zm0 14h12v-6H6v6Zm8-13h2v3h-2V6Z" />
+                  </svg>
+                  <span class="save-version-check" aria-hidden="true">✓</span>
+                </button>
               </div>
             </div>
             <div class="model-left-overlays">
@@ -4137,7 +4172,7 @@ renderComments();
 </script>
 
   <script src="./costanera-acacias-aall.js?v=2"></script>
-<script src="./version-manager.js?v=5"></script>
+<script src="./version-manager.js?v=6"></script>
 <script src="./firebase-config.js"></script>
 <script type="module" src="./firebase-sync.js"></script>
 </body>

@@ -26,6 +26,7 @@
   let activeVersions = [];
   let context = readJson(CONTEXT_KEY, {});
   let feedbackTimer = null;
+  let quickSaveResetTimer = null;
 
   const ui = buildInterface();
   wireInterface();
@@ -340,10 +341,12 @@
       updateModelTitle();
       await render();
       setFeedback();
+      setQuickSaveState("idle");
     } catch (error) {
       console.error(error);
       setFeedback("No se pudo iniciar la biblioteca de versiones.", "error");
       ui.saveButton.disabled = true;
+      setQuickSaveState("disabled");
     }
   }
 
@@ -449,6 +452,7 @@
       historyPanel: panel.querySelector("#versionHistoryPanel"),
       closeHistoryButton: panel.querySelector("#closeHistoryButton"),
       saveButton: panel.querySelector("#saveNewVersionButton"),
+      quickSaveButton: document.querySelector("#saveVersionButton"),
       feedback: panel.querySelector("#versionFeedback"),
       cloudButton: panel.querySelector("#cloudConnectionButton"),
       exportButton: panel.querySelector("#exportWorkspaceButton"),
@@ -463,6 +467,7 @@
     ui.close.addEventListener("click", () => setPanelOpen(false));
     ui.backdrop.addEventListener("click", () => setPanelOpen(false));
     ui.saveButton.addEventListener("click", saveNewVersion);
+    ui.quickSaveButton?.addEventListener("click", saveNewVersion);
     ui.moreButton.addEventListener("click", event => {
       event.stopPropagation();
       setOverflowOpen(ui.moreMenu.hidden);
@@ -557,6 +562,27 @@
     }
   }
 
+  function setQuickSaveState(state, versionLabel = "") {
+    const button = ui.quickSaveButton;
+    if (!button) return;
+    clearTimeout(quickSaveResetTimer);
+    button.dataset.state = state;
+    button.disabled = state === "saving" || state === "disabled";
+    const labels = {
+      idle: "Guardar nueva versión",
+      saving: "Guardando nueva versión",
+      success: versionLabel ? `Versión ${versionLabel} guardada` : "Nueva versión guardada",
+      error: "No se pudo guardar la nueva versión",
+      disabled: "Guardado no disponible"
+    };
+    const label = labels[state] || labels.idle;
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    if (state === "success" || state === "error") {
+      quickSaveResetTimer = setTimeout(() => setQuickSaveState("idle"), state === "error" ? 2500 : 1600);
+    }
+  }
+
   function setSyncStatus(message, type = "", actionable = false) {
     ui.cloudButton.className = `version-sync-status${type ? ` ${type}` : ""}${actionable ? " actionable" : ""}`;
     ui.cloudButton.lastElementChild.textContent = message;
@@ -634,6 +660,7 @@
     if (!activeModel || ui.saveButton.disabled) return;
     ui.saveButton.disabled = true;
     ui.saveButton.textContent = "Guardando…";
+    setQuickSaveState("saving");
     setFeedback("Guardando…");
     try {
       const result = await createVersion(activeModel.id, captureSnapshot(), {
@@ -651,6 +678,7 @@
         `Guardado · ${formatVersionLabel(result.version.id)}`,
         "success"
       );
+      setQuickSaveState("success", formatVersionLabel(result.version.id));
       if (cloudProvider?.isSignedIn?.()) {
         try {
           await cloudProvider.pushVersion(clone(activeModel), clone(result.version));
@@ -669,9 +697,11 @@
     } catch (error) {
       console.error(error);
       setFeedback("No se pudo guardar la nueva versión.", "error");
+      setQuickSaveState("error");
     } finally {
       ui.saveButton.disabled = false;
       ui.saveButton.textContent = "Guardar";
+      if (ui.quickSaveButton?.dataset.state === "saving") setQuickSaveState("idle");
     }
   }
 
