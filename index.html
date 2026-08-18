@@ -98,7 +98,7 @@
     .base-line, .segment-overlay, .full-overlay, .hit { fill: none; stroke-linecap: round; stroke-linejoin: round; }
     .base-line { stroke: #111; stroke-width: 5.2; pointer-events: none; }
     .base-line.branch { stroke-width: 3.4; }
-    .segment-overlay { stroke: #16a34a; stroke-width: 6; pointer-events: none; opacity: 0; transition: opacity .12s ease; }
+    .segment-overlay { stroke: #16a34a; stroke-width: 6; stroke-linecap: butt; pointer-events: none; opacity: 0; transition: opacity .12s ease; }
     .segment-overlay.branch { stroke-width: 4.2; }
     .segment-overlay.active { opacity: 1; }
     .full-overlay { stroke: #16a34a; stroke-width: 6.2; pointer-events: none; opacity: 0; }
@@ -1556,7 +1556,7 @@
       return collectorSegmentsRunAgainstPath(definition) ? modules.reverse() : modules;
     }
 
-    function poly(measure, startLen, endLen, overlap=0.8) {
+    function poly(measure, startLen, endLen, overlap=0) {
       const total = measure.getTotalLength();
       const safeStart = Math.max(0, startLen - overlap);
       const safeEnd = Math.min(total, endLen + overlap);
@@ -1596,24 +1596,47 @@
       if (!hasKnownLength(def)) return null;
       const total = measure.getTotalLength();
       const m = total / 2;
-      const p = measure.getPointAtLength(m);
-      const before = measure.getPointAtLength(Math.max(0, m - 2));
-      const after = measure.getPointAtLength(Math.min(total, m + 2));
-      const ang = Math.atan2(after.y - before.y, after.x - before.x);
+      const textValue = `${formatLength(def.meters)} m`;
+      const width = Math.max(34, textValue.length * 7.8);
+      let p = measure.getPointAtLength(m);
+      let before = measure.getPointAtLength(Math.max(0, m - 2));
+      let after = measure.getPointAtLength(Math.min(total, m + 2));
+      let ang = Math.atan2(after.y - before.y, after.x - before.x);
+      let x;
+      let y;
+
+      const branchGeometry = getBranchLabelGeometry(def);
+      if (branchGeometry) {
+        const { anchor, outer } = branchGeometry;
+        const dx = outer.x - anchor.x;
+        const dy = outer.y - anchor.y;
+        const magnitude = Math.hypot(dx, dy) || 1;
+        const ux = dx / magnitude;
+        const uy = dy / magnitude;
+        const outerRadius = Math.max(6, Number(outer.radius) || 0);
+        const clearance = outerRadius + width / 2 + 2;
+        ang = Math.atan2(uy, ux);
+        // La longitud del tirante se muestra después del sumidero, sobre la
+        // prolongación de su eje. Así nunca interrumpe colectores en la cámara.
+        x = outer.x + ux * clearance;
+        y = outer.y + uy * clearance;
+      } else {
+        const nx = -Math.sin(ang);
+        const ny = Math.cos(ang);
+        x = p.x + nx * -14;
+        y = p.y + ny * -14;
+      }
+
       let deg = ang * 180 / Math.PI;
       if (deg > 90 || deg < -90) deg += 180;
-      const nx = -Math.sin(ang), ny = Math.cos(ang);
-      const offset = def.kind === 'branch' ? -16 : -14;
-      const x = p.x + nx * offset, y = p.y + ny * offset;
-      const textValue = `${formatLength(def.meters)} m`;
       const group = E('g', {
         class: 'distance-group',
         transform: `rotate(${deg} ${x} ${y})`,
         'data-line-id': def.id,
+        'data-label-outer-node-id': branchGeometry?.outer?.id || '',
         role: 'button',
         'aria-label': `Longitud total de ${getLineDisplayName(def)}: ${textValue}`
       });
-      const width = Math.max(34, textValue.length * 7.8);
       const hit = E('rect', { class: 'distance-hit', x: x - width/2, y: y - 10, width, height: 20, rx: 5, ry: 5 });
       const label = E('text', { class: `distance-text ${def.kind}`, x, y });
       label.textContent = textValue;
@@ -1640,12 +1663,16 @@
       return group;
     }
 
-    function addSegmentGuides(measure, def) {
+    function addSegmentGuides(measure, def, segmentLengths) {
       const group = E('g', { class: 'segment-guides', 'data-line-id': def.id });
       segmentGuidesGroup.appendChild(group);
       if (!hasKnownLength(def)) return group;
 
-      const lens = def.kind === 'branch' ? [Number(def.meters)] : lengths(def.meters);
+      // Las guías y el avance deben compartir el mismo orden de módulos.
+      // En AALL esto conserva el sobrante aguas arriba, junto a la cámara.
+      const lens = Array.isArray(segmentLengths)
+        ? segmentLengths
+        : segmentLengthsForLine(def);
       const total = measure.getTotalLength();
       let acc = 0;
       for (let i=0; i<lens.length-1; i++) {
@@ -1680,6 +1707,244 @@
       if (fromNode?.elementType === 'chamber' && toNode) return { anchor: fromNode, outer: toNode };
       if (toNode?.elementType === 'chamber' && fromNode) return { anchor: toNode, outer: fromNode };
       return null;
+    }
+
+    function getBranchLabelGeometry(definition) {
+      const chamberGeometry = getBranchStretchGeometry(definition);
+      if (chamberGeometry) return chamberGeometry;
+      if (!definition || definition.kind !== 'branch') return null;
+
+      const fromNode = nodeMap.get(definition.from);
+      const toNode = nodeMap.get(definition.to);
+      if (!fromNode || !toNode) return null;
+      const branchDegree = nodeId => lineDefs.filter(line =>
+        line.kind === 'branch' && (line.from === nodeId || line.to === nodeId)
+      ).length;
+      const fromDegree = branchDegree(fromNode.id);
+      const toDegree = branchDegree(toNode.id);
+      return fromDegree <= toDegree
+        ? { anchor: toNode, outer: fromNode }
+        : { anchor: fromNode, outer: toNode };
+    }
+
+    function pointFallsInsideRotatedLabel(point, center, angle, halfWidth, halfHeight) {
+      const dx = point.x - center.x;
+      const dy = point.y - center.y;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const localX = dx * cos + dy * sin;
+      const localY = -dx * sin + dy * cos;
+      return Math.abs(localX) <= halfWidth && Math.abs(localY) <= halfHeight;
+    }
+
+    function stretchedLabelCenter(label, factor) {
+      if (!label.stretchGeometry) return label.center;
+      const { anchor, outer } = label.stretchGeometry;
+      return {
+        x: label.center.x + (outer.x - anchor.x) * (factor - 1),
+        y: label.center.y + (outer.y - anchor.y) * (factor - 1)
+      };
+    }
+
+    function rotatedLabelsOverlap(first, second, factor, padding = 2) {
+      const firstCenter = stretchedLabelCenter(first, factor);
+      const secondCenter = stretchedLabelCenter(second, factor);
+      const firstAxes = [
+        { x: Math.cos(first.angle), y: Math.sin(first.angle) },
+        { x: -Math.sin(first.angle), y: Math.cos(first.angle) }
+      ];
+      const secondAxes = [
+        { x: Math.cos(second.angle), y: Math.sin(second.angle) },
+        { x: -Math.sin(second.angle), y: Math.cos(second.angle) }
+      ];
+      const centerDelta = {
+        x: secondCenter.x - firstCenter.x,
+        y: secondCenter.y - firstCenter.y
+      };
+      const projectionRadius = (label, axis, axes) =>
+        label.halfWidth * Math.abs(axis.x * axes[0].x + axis.y * axes[0].y)
+        + label.halfHeight * Math.abs(axis.x * axes[1].x + axis.y * axes[1].y);
+
+      return [...firstAxes, ...secondAxes].every(axis => {
+        const distance = Math.abs(centerDelta.x * axis.x + centerDelta.y * axis.y);
+        const firstRadius = projectionRadius(first, axis, firstAxes);
+        const secondRadius = projectionRadius(second, axis, secondAxes);
+        return distance <= firstRadius + secondRadius + padding;
+      });
+    }
+
+    function buildBranchLabelPathSamples(factors) {
+      return factors.map(factor => [...lineStates.values()].map(state => {
+        const points = [];
+        const total = state.totalSvgLength;
+        const step = Math.max(1.5, total / 140);
+        for (let length = 0; length <= total + 0.001; length += step) {
+          const rawPoint = state.measurePath.getPointAtLength(Math.min(length, total));
+          points.push(stretchBranchPoint(state.definition, rawPoint, factor));
+        }
+        return {
+          lineId: state.definition.id,
+          kind: state.definition.kind,
+          points
+        };
+      }));
+    }
+
+    function scoreBranchDistanceCandidate(
+      definition,
+      geometry,
+      center,
+      angle,
+      width,
+      placedLabels,
+      factors,
+      sampledPathsByFactor
+    ) {
+      const ownStretchGeometry = getBranchStretchGeometry(definition);
+      let score = 0;
+      const candidateLabel = {
+        center,
+        angle,
+        halfWidth: width / 2 + 2,
+        halfHeight: 8,
+        stretchGeometry: ownStretchGeometry
+      };
+
+      factors.forEach((factor, factorIndex) => {
+        const candidate = ownStretchGeometry
+          ? {
+              x: center.x + (geometry.outer.x - geometry.anchor.x) * (factor - 1),
+              y: center.y + (geometry.outer.y - geometry.anchor.y) * (factor - 1)
+            }
+          : center;
+
+        sampledPathsByFactor[factorIndex].forEach(pathSample => {
+          if (pathSample.lineId === definition.id) return;
+          const overlaps = pathSample.points.some(point =>
+            pointFallsInsideRotatedLabel(point, candidate, angle, width / 2 + 3, 9)
+          );
+          if (overlaps) score += pathSample.kind === 'collector' ? 10000 : 2500;
+        });
+
+        placedLabels.forEach(placedLabel => {
+          if (rotatedLabelsOverlap(candidateLabel, placedLabel, factor)) score += 6000;
+        });
+      });
+      return score;
+    }
+
+    function layoutBranchDistanceLabels() {
+      const placedLabels = [];
+      const factors = [1, 1 + BRANCH_STRETCH_MAX / 2, 1 + BRANCH_STRETCH_MAX];
+      const sampledPathsByFactor = buildBranchLabelPathSamples(factors);
+      const branchStates = [...lineStates.values()]
+        .filter(state => state.definition.kind === 'branch' && state.distanceGroup)
+        .sort((first, second) => {
+          const firstAnchor = getBranchLabelGeometry(first.definition)?.anchor?.id;
+          const secondAnchor = getBranchLabelGeometry(second.definition)?.anchor?.id;
+          const degree = nodeId => lineDefs.filter(line =>
+            line.kind === 'branch' && (line.from === nodeId || line.to === nodeId)
+          ).length;
+          return degree(secondAnchor) - degree(firstAnchor);
+        });
+
+      branchStates.forEach(state => {
+        const definition = state.definition;
+        const geometry = getBranchLabelGeometry(definition);
+        if (!geometry) return;
+
+        const dx = geometry.outer.x - geometry.anchor.x;
+        const dy = geometry.outer.y - geometry.anchor.y;
+        const magnitude = Math.hypot(dx, dy) || 1;
+        const ux = dx / magnitude;
+        const uy = dy / magnitude;
+        const nx = -uy;
+        const ny = ux;
+        const angle = Math.atan2(uy, ux);
+        const hit = state.distanceGroup.querySelector('.distance-hit');
+        const text = state.distanceGroup.querySelector('.distance-text');
+        const width = Number(hit?.getAttribute('width')) || 34;
+        const outerRadius = Math.max(6, Number(geometry.outer.radius) || 0);
+        const baseDistance = outerRadius + width / 2 + 2;
+        const candidates = [];
+        const sideOffsets = [0, 14, -14, 26, -26, 40, -40, 54, -54, 68, -68];
+        const addOutsideCandidates = extraDistance => {
+          sideOffsets.forEach(sideOffset => {
+            candidates.push({
+              x: geometry.outer.x + ux * (baseDistance + extraDistance) + nx * sideOffset,
+              y: geometry.outer.y + uy * (baseDistance + extraDistance) + ny * sideOffset,
+              extraDistance,
+              sideOffset
+            });
+          });
+        };
+        addOutsideCandidates(0);
+
+        // Si el exterior está ocupado, conserva el texto cerca del sumidero
+        // colocándolo junto al tirante y manteniendo exactamente su dirección.
+        const insideDistance = Math.min(width / 2 + 4, magnitude * 0.35);
+        [18, -18, 28, -28, 40, -40].forEach(sideOffset => {
+          candidates.push({
+            x: geometry.outer.x - ux * insideDistance + nx * sideOffset,
+            y: geometry.outer.y - uy * insideDistance + ny * sideOffset,
+            extraDistance: 0,
+            sideOffset
+          });
+        });
+
+        // También puede ubicarse junto al propio tirante, cerca del sumidero.
+        // La rotación no cambia: el texto continúa paralelo a la tubería.
+        [0.72, 0.58].forEach(ratio => {
+          [18, -18, 28, -28, 40, -40].forEach(sideOffset => {
+            candidates.push({
+              x: geometry.anchor.x + dx * ratio + nx * sideOffset,
+              y: geometry.anchor.y + dy * ratio + ny * sideOffset,
+              extraDistance: 0,
+              sideOffset
+            });
+          });
+        });
+        [8, 16, 24].forEach(addOutsideCandidates);
+
+        let best = candidates[0];
+        let bestScore = Infinity;
+        for (const candidate of candidates) {
+          const collisionScore = scoreBranchDistanceCandidate(
+            definition,
+            geometry,
+            candidate,
+            angle,
+            width,
+            placedLabels,
+            factors,
+            sampledPathsByFactor
+          );
+          const candidateScore = collisionScore
+            + candidate.extraDistance * 3
+            + Math.abs(candidate.sideOffset);
+          if (candidateScore < bestScore) {
+            best = candidate;
+            bestScore = candidateScore;
+          }
+          if (collisionScore === 0) break;
+        }
+
+        let degrees = angle * 180 / Math.PI;
+        if (degrees > 90 || degrees < -90) degrees += 180;
+        state.distanceGroup.setAttribute('transform', `rotate(${degrees} ${best.x} ${best.y})`);
+        hit?.setAttribute('x', best.x - width / 2);
+        hit?.setAttribute('y', best.y - 10);
+        text?.setAttribute('x', best.x);
+        text?.setAttribute('y', best.y);
+        state.distanceGroupBaseTransform = state.distanceGroup.getAttribute('transform') || '';
+        placedLabels.push({
+          center: best,
+          angle,
+          halfWidth: width / 2 + 2,
+          halfHeight: 8,
+          stretchGeometry: getBranchStretchGeometry(definition)
+        });
+      });
     }
 
     function stretchBranchPoint(definition, point, factor = getBranchStretchFactor()) {
@@ -1821,7 +2086,7 @@
             'transform',
             factor === 1
               ? baseTransform
-              : `translate(${outerDx * 0.5} ${outerDy * 0.5}) ${baseTransform}`.trim()
+              : `translate(${outerDx} ${outerDy}) ${baseTransform}`.trim()
           );
         }
 
@@ -2745,7 +3010,11 @@
       const connectsDischarge = [def.from, def.to].some(nodeId =>
         nodeMap.get(nodeId)?.elementType === 'discharge'
       );
-      const base = E('path', { class: `base-line${branch ? ' branch' : ''}`, d:def.d });
+      const base = E('path', {
+        class: `base-line${branch ? ' branch' : ''}`,
+        d:def.d,
+        'data-line-id': def.id
+      });
       baseLinesGroup.appendChild(base);
       const visibleD = branch || connectsDischarge ? def.d : visibleLinePath(def);
       const measure = E('path', { class:'measure-path', d:visibleD, fill:'none', stroke:'none' });
@@ -2781,14 +3050,24 @@
         segmentLengths.forEach((segmentMeters, segmentIndex) => {
           const start = total * (acc / def.meters);
           const end = total * ((acc + segmentMeters) / def.meters);
-          const overlay = E('path', { class: `segment-overlay${branch ? ' branch' : ''}`, d: poly(measure, start, end) });
+          const overlay = E('path', {
+            class: `segment-overlay${branch ? ' branch' : ''}`,
+            d: poly(measure, start, end),
+            'data-line-id': def.id,
+            'data-segment-index': segmentIndex
+          });
           state.segmentOverlays.push(overlay);
           segmentOverlaysGroup.appendChild(overlay);
           state.shortSegmentSelectors[segmentIndex] = addShortSegmentSelector(state, segmentIndex, start, end);
           acc += segmentMeters;
         });
       } else {
-        const overlay = E('path', { class: `segment-overlay${branch ? ' branch' : ''}`, d:visibleD });
+        const overlay = E('path', {
+          class: `segment-overlay${branch ? ' branch' : ''}`,
+          d:visibleD,
+          'data-line-id': def.id,
+          'data-segment-index': 0
+        });
         state.segmentOverlays.push(overlay);
         segmentOverlaysGroup.appendChild(overlay);
       }
@@ -2796,7 +3075,7 @@
       const hit = E('path', { class:'hit', d:visibleD });
       lineHitboxesGroup.appendChild(hit);
       state.hitPath = hit;
-      state.guideGroup = addSegmentGuides(measure, def);
+      state.guideGroup = addSegmentGuides(measure, def, segmentLengths);
       state.distanceGroup = addDistanceLabel(measure, def);
       state.distanceGroupBaseTransform = state.distanceGroup?.getAttribute('transform') || '';
       lineStates.set(def.id, state);
@@ -2935,7 +3214,7 @@
       const scoreLabelPosition = (candidateBounds, nodeId) => {
         let score = 0;
         placedLabelBounds.forEach(bounds => {
-          if (intersects(candidateBounds, bounds, 5)) score += 500;
+          if (intersects(candidateBounds, bounds, 5)) score += 3000;
         });
         nodeDefs.forEach(node => {
           if (node.id === nodeId) return;
@@ -2946,27 +3225,43 @@
             top: node.y - radius,
             bottom: node.y + radius
           };
-          if (intersects(candidateBounds, nodeBounds, 5)) score += 120;
+          if (intersects(candidateBounds, nodeBounds, 5)) score += 1000;
         });
         lineStates.forEach(state => {
           const path = state.measurePath;
           const total = path.getTotalLength();
-          const step = Math.max(8, total / 90);
+          const step = Math.max(1.5, total / 160);
+          let overlapsPipe = false;
           for (let length = 0; length <= total; length += step) {
             const point = path.getPointAtLength(length);
             if (
               point.x >= candidateBounds.left - 5 && point.x <= candidateBounds.right + 5
               && point.y >= candidateBounds.top - 5 && point.y <= candidateBounds.bottom + 5
-            ) score += 8;
+            ) {
+              overlapsPipe = true;
+              break;
+            }
           }
+          if (overlapsPipe) score += 10000;
           const distanceText = state.distanceGroup?.querySelector('.distance-text');
+          const distanceHit = state.distanceGroup?.querySelector('.distance-hit');
           if (distanceText) {
             const x = Number(distanceText.getAttribute('x'));
             const y = Number(distanceText.getAttribute('y'));
-            if (
-              x >= candidateBounds.left - 14 && x <= candidateBounds.right + 14
-              && y >= candidateBounds.top - 10 && y <= candidateBounds.bottom + 10
-            ) score += 180;
+            const angle = Number(
+              state.distanceGroup?.getAttribute('transform')?.match(/rotate\(([-+\d.]+)/)?.[1] || 0
+            ) * Math.PI / 180;
+            const halfWidth = (Number(distanceHit?.getAttribute('width')) || 34) / 2;
+            const halfHeight = 10;
+            const extentX = Math.abs(Math.cos(angle)) * halfWidth + Math.abs(Math.sin(angle)) * halfHeight;
+            const extentY = Math.abs(Math.sin(angle)) * halfWidth + Math.abs(Math.cos(angle)) * halfHeight;
+            const distanceBounds = {
+              left: x - extentX,
+              right: x + extentX,
+              top: y - extentY,
+              bottom: y + extentY
+            };
+            if (intersects(candidateBounds, distanceBounds, 4)) score += 4000;
           }
         });
         return score;
@@ -2979,7 +3274,10 @@
         const cls = n.elementType;
         const labelValue = n.displayName || n.id;
         if (n.elementType === 'chamber') {
-          const candidates = [[42,-26],[44,22],[-42,-26],[-44,22],[0,-36],[0,36]];
+          const candidates = [
+            [42,-26],[44,22],[-42,-26],[-44,22],[0,-36],[0,36],
+            [58,-32],[58,32],[-58,-32],[-58,32],[0,-54],[0,54],[72,0],[-72,0]
+          ];
           let best = candidates[0], score = 1e9;
           for (const [dx,dy] of candidates) {
             const bx = x + dx, by = y + dy;
@@ -3076,6 +3374,7 @@
 
     buildNodes();
     lineDefs.forEach(buildLine);
+    layoutBranchDistanceLabels();
     placeLabels();
 
     const savedFilterSettings = loadFilterSettings();
