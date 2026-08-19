@@ -1087,7 +1087,7 @@
     }
 
     const activeNetworkGeoreference = isCostaneraGeoreferencedModel
-      ? Object.freeze({
+      ? Object.freeze(loadedGeoreference || {
           crs: 'EPSG:32717',
           orientationVersion: COSTANERA_GEOREFERENCE_VERSION,
           orientation: 'north-up',
@@ -1097,6 +1097,7 @@
         })
       : null;
     globalThis.RED_NETWORK_GEOREFERENCE = activeNetworkGeoreference;
+    globalThis.RED_NETWORK_SITE_GEOMETRY = versionBootstrap?.network?.siteGeometry || null;
 
     if (needsCostaneraOrientationCorrection && versionBootstrap?.network) {
       versionBootstrap.network.nodes = nodeDefs;
@@ -4158,17 +4159,19 @@ renderComments();
 <style>
   #satelliteLayerGroup,
   #linderoGroup { pointer-events: none; }
-  .lindero-outline {
+  .lindero-outline,
+  .site-area-outline {
     fill: none;
-    stroke: #f59e0b;
+    stroke: #22c55e;
     stroke-width: 5;
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
     filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .55));
   }
+  .site-area-outline { fill: rgba(34, 197, 94, .08); }
   .lindero-vertex {
-    fill: #facc15;
-    stroke: #713f12;
+    fill: #86efac;
+    stroke: #14532d;
     stroke-width: 2.5;
     vector-effect: non-scaling-stroke;
   }
@@ -4229,10 +4232,11 @@ renderComments();
   // Este lindero pertenece al modelo incorporado Costanera_acacias_AALL.
   if (!nodeMap.has('CAM_AL_24')) return;
 
-  const LINDERO_LAYER_SETTINGS_KEY = 'redVerde_costanera_lindero_layers_v2';
+  const LINDERO_LAYER_SETTINGS_KEY = 'redVerde_costanera_lindero_layers_v3';
+  const siteGeometry = globalThis.RED_NETWORK_SITE_GEOMETRY;
   // Vertices reconstruidos en el mismo marco CAD de la red a partir del PDF
   // conjunto. Las coordenadas UTM se conservan como fuente geodesica.
-  const linderoPoints = [
+  const legacyLinderoPoints = [
     { id: 'P1',  x: 19.44,   y: 2836.38, east: 603378.2373, north: 9754624.4459 },
     { id: 'P2',  x: 1315.48, y: 2803.29, east: 603559.6095, north: 9754758.1392 },
     { id: 'P3',  x: 1267.47, y: 2564.63, east: 603529.0173, north: 9754787.3646 },
@@ -4248,11 +4252,20 @@ renderComments();
     ...point,
     ...transformCostaneraCadPoint(point)
   }));
-  const polygonPoints = linderoPoints.map(point => `${point.x},${point.y}`).join(' ');
-  const drawingUnitsPerMeter = 5.7530408;
+  const boundaryPoints = Array.isArray(siteGeometry?.boundary?.points)
+    ? siteGeometry.boundary.points
+    : legacyLinderoPoints;
+  const controlPoints = Array.isArray(siteGeometry?.controlPoints)
+    ? siteGeometry.controlPoints
+    : legacyLinderoPoints;
+  const siteAreas = Array.isArray(siteGeometry?.areas) ? siteGeometry.areas : [];
+  const polygonPoints = boundaryPoints.map(point => `${point.x},${point.y}`).join(' ');
+  const drawingUnitsPerMeter = Number(activeNetworkGeoreference?.displayOrigin?.unitsPerMeter)
+    || 5.7530408;
   const satelliteMargin = 20 * drawingUnitsPerMeter;
   const satelliteExtentPoints = [
-    ...linderoPoints,
+    ...boundaryPoints,
+    ...siteAreas.flatMap(area => Array.isArray(area.points) ? area.points : []),
     ...nodeDefs
       .filter(node => Number.isFinite(Number(node.x)) && Number.isFinite(Number(node.y)))
       .map(node => ({ x: Number(node.x), y: Number(node.y) }))
@@ -4289,7 +4302,7 @@ renderComments();
     opacity: '0.5',
     'aria-label': 'Imagen satelital dentro del rectángulo de cobertura'
   });
-  const satelliteTransform = {
+  const legacySatelliteTransform = {
     a: 1.71601668,
     b: 0.00107929487,
     c: -0.00106980427,
@@ -4297,6 +4310,7 @@ renderComments();
     e: -218.055406,
     f: -99.5703121
   };
+  const satelliteTransform = siteGeometry?.satellite?.transform || legacySatelliteTransform;
   const satelliteTransformDeterminant = satelliteTransform.a * satelliteTransform.d
     - satelliteTransform.b * satelliteTransform.c;
   // Los mosaicos Web Mercator y el SVG usan X hacia la derecha e Y hacia
@@ -4308,9 +4322,9 @@ renderComments();
   const satelliteTiles = E('g', {
     transform: `matrix(${satelliteTransform.a} ${satelliteTransform.b} ${satelliteTransform.c} ${satelliteTransform.d} ${satelliteTransform.e} ${satelliteTransform.f})`
   });
-  const tileZoom = 19;
-  const tileOriginX = 145530;
-  const tileOriginY = 265371;
+  const tileZoom = Number(siteGeometry?.satellite?.zoom) || 19;
+  const tileOriginX = Number(siteGeometry?.satellite?.tileOriginX) || 145530;
+  const tileOriginY = Number(siteGeometry?.satellite?.tileOriginY) || 265371;
   // Carga todos los mosaicos que intersectan el rectangulo calculado con los
   // extremos de red/lindero y su margen de 20 m; no depende de un rango fijo.
   const satelliteBoundsCorners = [
@@ -4361,20 +4375,37 @@ renderComments();
   satelliteLayer.appendChild(satelliteTiles);
   svgElement.insertBefore(satelliteLayer, baseLayer);
 
-  const linderoGroup = E('g', { id: 'linderoGroup', 'aria-label': 'Lindero georreferenciado' });
+  const linderoGroup = E('g', {
+    id: 'linderoGroup',
+    'aria-label': 'Lindero y elementos del terreno georreferenciados'
+  });
   const outline = E('polygon', { class: 'lindero-outline', points: polygonPoints });
   const outlineTitle = E('title');
-  outlineTitle.textContent = 'Lindero georreferenciado - WGS84 / UTM 17S';
+  outlineTitle.textContent = `${siteGeometry?.boundary?.name || 'Lindero georreferenciado'} - WGS84 / UTM 17S`;
   outline.appendChild(outlineTitle);
   linderoGroup.appendChild(outline);
 
-  linderoPoints.forEach(point => {
+  siteAreas.forEach(area => {
+    if (!Array.isArray(area.points) || area.points.length < 3) return;
+    const areaOutline = E('polygon', {
+      class: 'site-area-outline',
+      points: area.points.map(point => `${point.x},${point.y}`).join(' ')
+    });
+    const areaTitle = E('title');
+    areaTitle.textContent = area.name || 'Elemento del terreno';
+    areaOutline.appendChild(areaTitle);
+    linderoGroup.appendChild(areaOutline);
+  });
+
+  controlPoints.forEach(point => {
     const marker = E('g', { transform: `translate(${point.x} ${point.y})` });
     const markerTitle = E('title');
-    markerTitle.textContent = `${point.id} - Este ${point.east.toFixed(4)} m, Norte ${point.north.toFixed(4)} m`;
+    markerTitle.textContent = Number.isFinite(Number(point.east)) && Number.isFinite(Number(point.north))
+      ? `${point.id} - Este ${Number(point.east).toFixed(4)} m, Norte ${Number(point.north).toFixed(4)} m`
+      : point.id;
     const circle = E('circle', { class: 'lindero-vertex', r: 13 });
     const label = E('text', { class: 'lindero-label', x: 0, y: 1 });
-    label.textContent = point.id.replace('P', '');
+    label.textContent = String(point.id || '').replace(/^P/i, '');
     marker.append(markerTitle, circle, label);
     linderoGroup.appendChild(marker);
   });
@@ -4384,7 +4415,7 @@ renderComments();
   const linderoFilterLabel = document.createElement('label');
   linderoFilterLabel.className = 'filter-row';
   linderoFilterLabel.setAttribute('for', 'linderoFilterCheckbox');
-  linderoFilterLabel.innerHTML = '<input id="linderoFilterCheckbox" type="checkbox" /><span>Linderos / Perímetro</span>';
+  linderoFilterLabel.innerHTML = '<input id="linderoFilterCheckbox" type="checkbox" /><span>Lindero / estanque</span>';
 
   const satelliteFilterLabel = document.createElement('label');
   satelliteFilterLabel.className = 'filter-row';
@@ -4470,8 +4501,8 @@ renderComments();
 })();
 </script>
 
-  <script src="./costanera-acacias-aall.js?v=2"></script>
-<script src="./version-manager.js?v=6"></script>
+  <script src="./costanera-acacias-aall.js?v=3"></script>
+<script src="./version-manager.js?v=7"></script>
 <script src="./firebase-config.js"></script>
 <script type="module" src="./firebase-sync.js"></script>
 </body>

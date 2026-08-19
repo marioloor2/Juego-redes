@@ -139,7 +139,8 @@
       lines: clone(lineDefs),
       routeEdges: clone(routeEdges),
       viewBox: clone(INITIAL_VIEW_BOX),
-      georeference: clone(globalThis.RED_NETWORK_GEOREFERENCE || null)
+      georeference: clone(globalThis.RED_NETWORK_GEOREFERENCE || null),
+      siteGeometry: clone(globalThis.RED_NETWORK_SITE_GEOMETRY || null)
     };
 
     return {
