@@ -54,6 +54,11 @@
       position: relative; display: grid; width: 34px; height: 34px; min-width: 34px; min-height: 34px;
       place-items: center; padding: 0; transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
     }
+    .search-btn {
+      display: grid; width: 34px; height: 34px; min-width: 34px; min-height: 34px;
+      place-items: center; padding: 0;
+    }
+    .search-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
     .save-version-btn svg { width: 18px; height: 18px; fill: currentColor; }
     .save-version-btn .save-version-check { display: none; font-size: 20px; font-weight: 800; }
     .save-version-btn[data-state="saving"] svg { visibility: hidden; }
@@ -113,6 +118,11 @@
     .headwall-shape { fill: none; stroke: #111; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
     .headwall-hit { fill: transparent; stroke: transparent; pointer-events: all; }
     .node.discharge.active .headwall-shape { stroke: #16a34a; }
+    .base-line.search-target { stroke: #f59e0b; }
+    .hit.search-target { stroke: #f59e0b; stroke-width: 8; opacity: .9; }
+    .node.search-target { filter: drop-shadow(0 0 4px #f59e0b); }
+    .node.search-target:not(.discharge) { stroke: #f59e0b; stroke-width: 4; }
+    .node.discharge.search-target .headwall-shape { stroke: #f59e0b; stroke-width: 4.5; }
     .node:active { transform: scale(1.1); }
     .node.active { fill: #16a34a; }
     .node-label { fill: #111; font-weight: 700; text-anchor: middle; dominant-baseline: middle; pointer-events: all; cursor: pointer; user-select: none; paint-order: stroke; stroke: #fafafa; stroke-width: 6px; stroke-linejoin: round; }
@@ -297,7 +307,7 @@
     .activities th:nth-child(5), .activities td:nth-child(5) { width: 10%; text-align: center; }
     .activities tbody tr:last-child td { border-bottom: 0; }
     .activity-select { width: 18px; height: 18px; margin: 0; accent-color: #2563eb; cursor: pointer; }
-    .date-input { width: 100%; min-width: 0; padding: 6px 4px; border: 1px solid #bfc5ce; border-radius: 7px; font-size: 12px; background: #fff; }
+    .date-input { width: 100%; min-width: 0; padding: 6px 4px; border: 1px solid #bfc5ce; border-radius: 7px; font-size: 12px; background: #fff; text-align: center; font-variant-numeric: tabular-nums; }
     .activity-dir { overflow-wrap: anywhere; font-weight: 700; }
     .delete-btn { width: 28px; height: 28px; padding: 0; border-radius: 50%; background: #fee2e2; color: #dc2626; font-size: 18px; font-weight: 800; line-height: 1; }
     .backdrop { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(0,0,0,.45); }
@@ -528,6 +538,8 @@
       .fit-btn { min-width: 48px; font-size: 10px; }
       .save-version-btn { width: 28px; height: 28px; min-width: 28px; min-height: 28px; padding: 0; }
       .save-version-btn svg { width: 16px; height: 16px; }
+      .search-btn { width: 28px; height: 28px; min-width: 28px; min-height: 28px; padding: 0; }
+      .search-btn svg { width: 16px; height: 16px; }
       .version-library-toggle,
       .theme-toggle-button {
         width: 34px; height: 34px; min-width: 34px; min-height: 34px;
@@ -588,6 +600,18 @@
               <div class="quick-actions" aria-label="Registrar información">
                 <button id="openActivityButton" class="zoom-btn quick-action-btn" type="button" aria-label="Registrar actividad">Actividad</button>
                 <button id="toggleCommentModeButton" class="zoom-btn quick-action-btn comment-btn" type="button" aria-label="Registrar comentario" aria-pressed="false">Comentario</button>
+                <button
+                  id="openSearchButton"
+                  class="zoom-btn quick-action-btn search-btn"
+                  type="button"
+                  aria-label="Buscar elemento por ID"
+                  title="Buscar elemento"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="10.5" cy="10.5" r="6.5"></circle>
+                    <path d="m15.5 15.5 5 5"></path>
+                  </svg>
+                </button>
                 <button
                   id="saveVersionButton"
                   class="zoom-btn quick-action-btn save-version-btn"
@@ -830,10 +854,31 @@
             </label>
             <div id="activityFullLengthHint" class="activity-length-hint" aria-live="polite"></div>
           </div>
-          <div class="form-field"><label for="activityDateInput">Fecha</label><input id="activityDateInput" type="date" required /></div>
+          <div class="form-field"><label for="activityDateInput">Fecha</label><input id="activityDateInput" type="text" inputmode="numeric" maxlength="10" placeholder="DD/MM/AAAA" autocomplete="off" required /></div>
         </div>
         <div id="activityFormError" class="form-error"></div>
         <div class="modal-actions"><button id="cancelActivityButton" class="secondary" type="button">Cancelar</button><button type="submit">Guardar actividad</button></div>
+      </form>
+    </section>
+  </div>
+
+  <div id="searchModal" class="backdrop" aria-hidden="true">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="searchTitle">
+      <h2 id="searchTitle">Buscar elemento</h2>
+      <p class="modal-subtitle">Escribe el ID de una cámara, sumidero, descarga o tubería.</p>
+      <form id="searchForm" novalidate>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="searchInput">ID del elemento</label>
+            <input id="searchInput" type="search" list="searchSuggestions" placeholder="Ej.: AL-23, S-17 u O-14" autocomplete="off" required />
+            <datalist id="searchSuggestions"></datalist>
+          </div>
+        </div>
+        <div id="searchError" class="form-error" aria-live="polite"></div>
+        <div class="modal-actions">
+          <button id="cancelSearchButton" class="secondary" type="button">Cancelar</button>
+          <button type="submit">Buscar</button>
+        </div>
       </form>
     </section>
   </div>
@@ -1286,6 +1331,7 @@
     const svg = document.getElementById("networkSvg");
     const viewport = document.getElementById("networkViewport");
     const fitViewButton = document.getElementById("fitViewButton");
+    const openSearchButton = document.getElementById("openSearchButton");
     const baseLinesGroup = document.getElementById("baseLinesGroup");
     const segmentGuidesGroup = document.getElementById("segmentGuidesGroup");
     const segmentOverlaysGroup = document.getElementById("segmentOverlaysGroup");
@@ -1403,6 +1449,12 @@
     const branchProgressText = document.getElementById("branchProgressText");
     const collectorProgressWarning = document.getElementById("collectorProgressWarning");
     const branchProgressWarning = document.getElementById("branchProgressWarning");
+    const searchModal = document.getElementById("searchModal");
+    const searchForm = document.getElementById("searchForm");
+    const searchInput = document.getElementById("searchInput");
+    const searchSuggestions = document.getElementById("searchSuggestions");
+    const searchError = document.getElementById("searchError");
+    const cancelSearchButton = document.getElementById("cancelSearchButton");
 
     const nodeMap = new Map(nodeDefs.map(n => [n.id, n]));
     const validCameras = nodeDefs.filter(n => n.elementType === 'chamber').map(n => n.id);
@@ -1514,6 +1566,11 @@
     const DIAGRAM_VIEW_BOX_WIDTH = Number(INITIAL_VIEW_BOX.width) || 1092.19;
     const MIN_VIEW_BOX_WIDTH = DIAGRAM_VIEW_BOX_WIDTH * 0.1536 * Math.sqrt(0.8) * 0.8;
     const MAX_VIEW_BOX_WIDTH = INITIAL_VIEW_BOX.width * 1.7;
+    const STANDARD_WHEEL_ZOOM_FACTOR = Math.exp(-120 * 0.0015);
+    const SEARCH_VIEW_BOX_WIDTH = Math.min(
+      INITIAL_VIEW_BOX.width,
+      MIN_VIEW_BOX_WIDTH / (STANDARD_WHEEL_ZOOM_FACTOR ** 2)
+    );
     const BRANCH_STRETCH_START_RATIO = 0.35;
     const BRANCH_STRETCH_MAX = 0.35;
     const DISCHARGE_HEADWALL_OFFSET = 13;
@@ -1692,13 +1749,17 @@
       return group;
     }
 
-    function getBranchStretchFactor() {
-      const widthRatio = currentViewBox.width / INITIAL_VIEW_BOX.width;
+    function getBranchStretchFactorForWidth(viewBoxWidth) {
+      const widthRatio = viewBoxWidth / INITIAL_VIEW_BOX.width;
       const minimumRatio = MIN_VIEW_BOX_WIDTH / INITIAL_VIEW_BOX.width;
       const progress = Math.max(0, Math.min(1,
         (BRANCH_STRETCH_START_RATIO - widthRatio) / (BRANCH_STRETCH_START_RATIO - minimumRatio)
       ));
       return 1 + BRANCH_STRETCH_MAX * progress;
+    }
+
+    function getBranchStretchFactor() {
+      return getBranchStretchFactorForWidth(currentViewBox.width);
     }
 
     function getBranchStretchGeometry(definition) {
@@ -2420,6 +2481,40 @@
     function todayInputDate() { const now = new Date(); const local = new Date(now.getTime() - now.getTimezoneOffset()*60000); return local.toISOString().slice(0,10); }
     function normalizeName(v) { return String(v ?? '').trim().toUpperCase(); }
 
+    function formatDateForDisplay(value) {
+      const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value || '');
+    }
+
+    function parseDisplayDate(value) {
+      const match = String(value || '').trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (!match) return null;
+      const day = Number(match[1]);
+      const month = Number(match[2]);
+      const year = Number(match[3]);
+      const date = new Date(Date.UTC(year, month - 1, day));
+      if (
+        date.getUTCFullYear() !== year ||
+        date.getUTCMonth() !== month - 1 ||
+        date.getUTCDate() !== day
+      ) return null;
+      return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+
+    function formatDateDigits(value) {
+      const digits = String(value || '').replace(/\D/g, '').slice(0, 8);
+      if (digits.length <= 2) return digits;
+      if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+      return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    }
+
+    function enableDayFirstDateInput(input) {
+      input.addEventListener('input', () => {
+        input.setCustomValidity('');
+        input.value = formatDateDigits(input.value);
+      });
+    }
+
     function getNodeTypeLabel(node) {
       return ({ chamber: 'Cámara', sump: 'Sumidero', discharge: 'Descarga / cabezal' })[node?.elementType] || 'Punto';
     }
@@ -2435,6 +2530,145 @@
       const routeName = `${getNodeDisplayName(definition.from)}–${getNodeDisplayName(definition.to)}`;
       const identifier = lineStates.get(definition.id)?.attributes?.identifier || definition.identifier;
       return identifier ? `${identifier} · ${routeName}` : routeName;
+    }
+
+    function normalizeSearchId(value) {
+      return normalizeName(value)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^A-Z0-9]/g, '');
+    }
+
+    function getSearchTargets() {
+      const targets = nodeDefs.map(node => ({
+        kind: 'node',
+        id: node.id,
+        node,
+        value: getNodeDisplayName(node.id),
+        description: getNodeTypeLabel(node),
+        aliases: [node.displayName, node.id].filter(Boolean)
+      }));
+
+      lineStates.forEach(state => {
+        const definition = state.definition;
+        const visibleIdentifier = state.attributes.identifier || definition.identifier || '';
+        targets.push({
+          kind: 'line',
+          id: definition.id,
+          state,
+          value: visibleIdentifier || definition.id,
+          description: definition.kind === 'branch' ? 'Tirante' : 'Colector',
+          aliases: [visibleIdentifier, definition.identifier, definition.id].filter(Boolean)
+        });
+      });
+      return targets;
+    }
+
+    function refreshSearchSuggestions() {
+      searchSuggestions.innerHTML = '';
+      const used = new Set();
+      getSearchTargets().forEach(target => {
+        const key = normalizeSearchId(target.value);
+        if (!key || used.has(key)) return;
+        used.add(key);
+        const option = document.createElement('option');
+        option.value = target.value;
+        option.label = target.description;
+        searchSuggestions.appendChild(option);
+      });
+    }
+
+    function openSearchModal() {
+      refreshSearchSuggestions();
+      searchInput.value = '';
+      searchError.textContent = '';
+      searchModal.classList.add('open');
+      searchModal.setAttribute('aria-hidden', 'false');
+      setTimeout(() => searchInput.focus(), 40);
+    }
+
+    function closeSearchModal() {
+      searchModal.classList.remove('open');
+      searchModal.setAttribute('aria-hidden', 'true');
+      searchError.textContent = '';
+    }
+
+    function resolveSearchTarget(value) {
+      const query = normalizeSearchId(value);
+      if (!query) return { error: 'Escribe un ID para buscar.' };
+      const targets = getSearchTargets();
+      const exactMatches = targets.filter(target =>
+        target.aliases.some(alias => normalizeSearchId(alias) === query)
+      );
+      if (exactMatches.length === 1) return { target: exactMatches[0] };
+      if (exactMatches.length > 1) return { error: 'Hay varios elementos con ese ID. Usa un ID más específico.' };
+
+      const partialMatches = targets.filter(target =>
+        target.aliases.some(alias => normalizeSearchId(alias).includes(query))
+      );
+      if (partialMatches.length === 1) return { target: partialMatches[0] };
+      if (partialMatches.length > 1) {
+        const examples = partialMatches.slice(0, 4).map(target => target.value).join(', ');
+        return { error: `Hay varias coincidencias: ${examples}. Escribe el ID completo.` };
+      }
+      return { error: `No se encontró ningún elemento con el ID “${value.trim()}”.` };
+    }
+
+    function getSearchTargetPoint(target) {
+      const stretchFactor = getBranchStretchFactorForWidth(SEARCH_VIEW_BOX_WIDTH);
+      if (target.kind === 'line') {
+        const state = target.state;
+        const midpoint = state.measurePath.getPointAtLength(state.totalSvgLength / 2);
+        return stretchBranchPoint(state.definition, midpoint, stretchFactor);
+      }
+
+      const node = target.node;
+      if (node.elementType === 'discharge') return getDischargeVisualPoint(node);
+      const branch = lineDefs.find(definition =>
+        getBranchStretchGeometry(definition)?.outer?.id === node.id
+      );
+      return branch
+        ? stretchBranchPoint(branch, node, stretchFactor)
+        : { x: node.x, y: node.y };
+    }
+
+    let searchHighlightTimer = null;
+    function highlightSearchTarget(target) {
+      document.querySelectorAll('.search-target').forEach(element => element.classList.remove('search-target'));
+      const element = target.kind === 'line'
+        ? target.state.hitPath
+        : [...nodesGroup.querySelectorAll('[data-node-id]')].find(node => node.dataset.nodeId === target.id);
+      if (!element) return;
+      element.classList.add('search-target');
+      if (searchHighlightTimer) clearTimeout(searchHighlightTimer);
+      searchHighlightTimer = setTimeout(() => element.classList.remove('search-target'), 2200);
+    }
+
+    function focusSearchTarget(target) {
+      const point = getSearchTargetPoint(target);
+      const aspect = INITIAL_VIEW_BOX.height / INITIAL_VIEW_BOX.width;
+      currentViewBox = {
+        x: point.x - SEARCH_VIEW_BOX_WIDTH / 2,
+        y: point.y - (SEARCH_VIEW_BOX_WIDTH * aspect) / 2,
+        width: SEARCH_VIEW_BOX_WIDTH,
+        height: SEARCH_VIEW_BOX_WIDTH * aspect
+      };
+      clampViewBox();
+      applyViewBox();
+      highlightSearchTarget(target);
+    }
+
+    function submitSearch(event) {
+      event.preventDefault();
+      const result = resolveSearchTarget(searchInput.value);
+      if (!result.target) {
+        searchError.textContent = result.error;
+        searchInput.focus();
+        searchInput.select();
+        return;
+      }
+      closeSearchModal();
+      focusSearchTarget(result.target);
     }
 
     function resolveMainCameraName(value) {
@@ -2781,10 +3015,12 @@
         setGroupActivitiesMessage('Las actividades deben pertenecer al mismo tramo y tener la misma dirección.', 'error');
         return;
       }
-      if (selected.some(activity => (activity.date || '') !== (first.date || ''))) {
-        setGroupActivitiesMessage('Las actividades deben tener la misma fecha.', 'error');
+      const existingDates = [...new Set(selected.map(activity => activity.date || '').filter(Boolean))];
+      if (existingDates.length > 1) {
+        setGroupActivitiesMessage('Las actividades con fecha deben corresponder al mismo día.', 'error');
         return;
       }
+      const inheritedDate = existingDates[0] || '';
 
       const segments = selected.flatMap(activity =>
         Array.isArray(activity.appliedSegments) ? activity.appliedSegments : []
@@ -2811,7 +3047,7 @@
 
       const selectedIds = new Set(selected.map(activity => activity.id));
       const insertionIndex = Math.min(...selected.map(activity => activities.indexOf(activity)));
-      const groupedActivity = createManualGroup(first, orderedSegments);
+      const groupedActivity = createManualGroup({ ...first, date: inheritedDate }, orderedSegments);
       activities = activities.filter(activity => !selectedIds.has(activity.id));
       activities.splice(insertionIndex, 0, groupedActivity);
       selectedActivityIds.clear();
@@ -2873,10 +3109,32 @@
         len.textContent = shownLength !== null && shownLength !== undefined && Number.isFinite(Number(shownLength)) ? `${formatLength(shownLength)} m` : '—';
         const dateCell = document.createElement('td');
         const dateInput = document.createElement('input');
-        dateInput.type = 'date';
+        dateInput.type = 'text';
+        dateInput.inputMode = 'numeric';
+        dateInput.maxLength = 10;
+        dateInput.placeholder = 'DD/MM/AAAA';
         dateInput.className = 'date-input';
-        dateInput.value = activity.date || '';
-        dateInput.addEventListener('change', () => { activity.date = dateInput.value; saveActivities(); });
+        dateInput.value = formatDateForDisplay(activity.date);
+        enableDayFirstDateInput(dateInput);
+        dateInput.addEventListener('change', () => {
+          const displayedDate = dateInput.value.trim();
+          if (!displayedDate) {
+            activity.date = '';
+            dateInput.setCustomValidity('');
+            saveActivities();
+            return;
+          }
+          const parsedDate = parseDisplayDate(displayedDate);
+          if (!parsedDate) {
+            dateInput.setCustomValidity('Escribe una fecha válida en formato día/mes/año.');
+            dateInput.reportValidity();
+            return;
+          }
+          dateInput.setCustomValidity('');
+          dateInput.value = formatDateForDisplay(parsedDate);
+          activity.date = parsedDate;
+          saveActivities();
+        });
         dateCell.appendChild(dateInput);
         const actions = document.createElement('td');
         const del = document.createElement('button');
@@ -2935,7 +3193,7 @@
       activityLengthInput.required = true;
       activityFullLengthHint.textContent = '';
       activityFormError.textContent = '';
-      activityDateInput.value = todayInputDate();
+      activityDateInput.value = formatDateForDisplay(todayInputDate());
       activityModal.classList.add('open');
       activityModal.setAttribute('aria-hidden','false');
       setTimeout(() => startCameraInput.focus(), 40);
@@ -2949,11 +3207,13 @@
       const startCamera = resolveMainCameraName(startCameraInput.value);
       const endCamera = resolveMainCameraName(endCameraInput.value);
       const useFullLength = activityFullLengthCheckbox.checked;
-      const date = activityDateInput.value;
+      const dateText = activityDateInput.value.trim();
+      const date = parseDisplayDate(dateText);
       if (!startText || !endText) { activityFormError.textContent = 'Debes escribir la cámara de inicio y la cámara de fin.'; return; }
       if (!startCamera || !endCamera) { activityFormError.textContent = `Por ahora las cámaras válidas son: ${validCameras.map(getNodeDisplayName).join(', ')}.`; return; }
       if (startCamera === endCamera) { activityFormError.textContent = 'La cámara de inicio y la cámara de fin no pueden ser la misma.'; return; }
-      if (!date) { activityFormError.textContent = 'Debes seleccionar una fecha.'; return; }
+      if (!dateText) { activityFormError.textContent = 'Debes escribir una fecha.'; return; }
+      if (!date) { activityFormError.textContent = 'Escribe una fecha válida en formato día/mes/año.'; return; }
 
       const capacity = getAvailableLength(startCamera, endCamera);
 
@@ -3448,6 +3708,10 @@
       }
     });
     openActivityButton.addEventListener('click', openActivityModal);
+    openSearchButton.addEventListener('click', openSearchModal);
+    cancelSearchButton.addEventListener('click', closeSearchModal);
+    searchForm.addEventListener('submit', submitSearch);
+    enableDayFirstDateInput(activityDateInput);
     groupActivitiesButton.addEventListener('click', groupSelectedActivities);
     groupActivitiesButton.addEventListener('keydown', event => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -3473,11 +3737,13 @@
     attributeModal.addEventListener('pointerdown', (event) => { if (event.target === attributeModal) closeAttributes(); });
     nodeNameModal.addEventListener('pointerdown', (event) => { if (event.target === nodeNameModal) closeNodeNameEditor(); });
     activityModal.addEventListener('pointerdown', (event) => { if (event.target === activityModal) closeActivityModal(); });
+    searchModal.addEventListener('pointerdown', (event) => { if (event.target === searchModal) closeSearchModal(); });
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
       if (attributeModal.classList.contains('open')) closeAttributes();
       if (nodeNameModal.classList.contains('open')) closeNodeNameEditor();
       if (activityModal.classList.contains('open')) closeActivityModal();
+      if (searchModal.classList.contains('open')) closeSearchModal();
     });
   </script>
 
