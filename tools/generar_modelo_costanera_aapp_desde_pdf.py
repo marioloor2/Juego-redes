@@ -34,6 +34,15 @@ DISPLAY_MARGIN_METERS = 24.0
 ENDPOINT_SNAP_POINTS = 2.0
 # Por debajo de esta longitud el trozo no merece ser un tramo propio.
 SHORT_RUN_METERS = 5.0
+# Un resto corto se integra en su vecino cuando además es marginal frente a él:
+# 60 m seguidos de 1 m se acotan como 61 m, no como dos medidas.
+MINOR_RUN_METERS = 15.0
+MINOR_RUN_SHARE = 0.12
+# Al emparejar rótulos del plano con tramos pesa la cercanía y, sobre todo, que
+# la longitud declarada coincida con la medida real.
+PLAN_LENGTH_WEIGHT = 3.0
+# Margen para dar por buena una medida declarada frente a la geometría.
+PLAN_MERGE_TOLERANCE_METERS = 1.0
 # Un vecino continúa el trazo si el quiebre en el accesorio no pasa de esto.
 MAX_MERGE_DEVIATION_DEGREES = 45.0
 # Aparatos que representan por sí solos el final de la tubería.
@@ -167,7 +176,101 @@ def line_endpoints(line):
     return np.asarray(values[:2]), np.asarray(values[2:4])
 
 
-def build_runs(lines):
+def assign_plan_codes(runs, tramos, lines):
+    """Empareja cada rótulo del plano con el tramo que mejor lo explica.
+
+    El criterio anterior era solo la cercanía del rótulo a la geometría, y
+    confundía tramos vecinos: dos códigos quedaron intercambiados. Ahora pesa
+    también que la longitud declarada coincida con la medida real del tramo.
+    """
+    by_id = {line["id"]: line for line in lines}
+    segments_of = {
+        run["id"]: [line_endpoints(by_id[line_id]) for line_id in run["lines"]]
+        for run in runs
+    }
+
+    pairs = []
+    for tramo in tramos:
+        for run in runs:
+            if str(tramo["diameter"]) != run["diameter"]:
+                continue
+            distance = min(
+                point_segment_distance(tramo["labelDisplayPoint"], start, end)
+                for start, end in segments_of[run["id"]]
+            ) / UNITS_PER_METER
+            # Sin longitud declarada solo puede pesar la cercanía del rótulo.
+            gap = None if tramo["meters"] is None else abs(tramo["meters"] - run["meters"])
+            cost = distance if gap is None else distance + gap * PLAN_LENGTH_WEIGHT
+            pairs.append((cost, distance, gap, tramo, run))
+
+    pairs.sort(key=lambda item: item[0])
+    taken_runs, taken_codes = set(), set()
+    report = []
+    for _cost, distance, gap, tramo, run in pairs:
+        if tramo["identifier"] in taken_codes or run["id"] in taken_runs:
+            continue
+        taken_codes.add(tramo["identifier"])
+        taken_runs.add(run["id"])
+        run["identifier"] = tramo["identifier"]
+        run["planMeters"] = tramo["meters"]
+        run["flow"] = tramo.get("flow")
+        report.append({
+            "code": tramo["identifier"], "run": run["id"],
+            "planMeters": tramo["meters"], "meters": run["meters"],
+            "gap": None if gap is None else round(gap, 2),
+            "labelDistanceMeters": round(distance, 2),
+        })
+    if len(report) != len(tramos):
+        raise ValueError(f"Quedaron rótulos sin tramo: {len(tramos) - len(report)}")
+    return report
+
+
+def plan_guided_merges(runs, lines):
+    """Une tramos cuando el propio plano dice que son una sola medida.
+
+    Si un código declara más metros de los que mide su tramo y al sumarle el
+    contiguo del mismo diámetro cuadra, es que el plano acota los dos juntos.
+    """
+    by_id = {line["id"]: line for line in lines}
+    run_of_line = {line_id: run for run in runs for line_id in run["lines"]}
+    touching = defaultdict(set)
+    for line in lines:
+        touching[line["from"]].add(line["id"])
+        touching[line["to"]].add(line["id"])
+
+    merges = []
+    for run in runs:
+        plan = run.get("planMeters")
+        if plan is None or run["diameter"] == "200":
+            continue
+        missing = plan - run["meters"]
+        if missing <= PLAN_MERGE_TOLERANCE_METERS:
+            continue
+        best = None
+        for line_id in run["lines"]:
+            for node_id in (by_id[line_id]["from"], by_id[line_id]["to"]):
+                for other_id in touching[node_id]:
+                    other = run_of_line[other_id]
+                    if other["id"] == run["id"] or other["diameter"] != run["diameter"]:
+                        continue
+                    if other.get("planMeters") is not None:
+                        continue  # ya tiene su propia medida declarada
+                    gap = abs(missing - other["meters"])
+                    if gap > PLAN_MERGE_TOLERANCE_METERS:
+                        continue
+                    if best is None or gap < best[0]:
+                        best = (gap, line_id, other_id, other["id"], other["meters"])
+        if best:
+            merges.append({
+                "code": run["identifier"], "run": run["id"], "with": best[3],
+                "planMeters": plan, "was": run["meters"],
+                "becomes": round(run["meters"] + best[4], 2), "gap": round(best[0], 2),
+                "pair": (best[1], best[2]),
+            })
+    return merges
+
+
+def build_runs(lines, extra_merges=()):
     """Agrupa las líneas en tramos, absorbiendo los trozos cortos en su vecino.
 
     Un trozo de menos de SHORT_RUN_METERS no merece ser un tramo propio. Se
@@ -202,35 +305,48 @@ def build_runs(lines):
             item = parent[item]
         return item
 
+    for first, second in extra_merges:
+        if find(first) != find(second):
+            parent[find(second)] = find(first)
+
     changed = True
     while changed:
         changed = False
         members = defaultdict(list)
         for line_id in parent:
             members[find(line_id)].append(line_id)
+        totals = {root: sum(by_id[m]["meters"] for m in group) for root, group in members.items()}
         short_first = sorted(
-            (root for root, group in members.items()
-             if by_id[root]["diameter"] != "200"
-             and sum(by_id[m]["meters"] for m in group) < SHORT_RUN_METERS),
-            key=lambda root: sum(by_id[m]["meters"] for m in members[root]),
+            (root for root in members if by_id[root]["diameter"] != "200"
+             and totals[root] < MINOR_RUN_METERS),
+            key=lambda root: totals[root],
         )
         for root in short_first:
             group = set(members[root])
+            total = totals[root]
             best = None
             for line_id in group:
                 for node_id in (by_id[line_id]["from"], by_id[line_id]["to"]):
                     passthrough = len(incident[node_id]) == 2
                     for other_id in incident[node_id]:
-                        if other_id in group or find(other_id) == root:
+                        other_root = find(other_id)
+                        if other_id in group or other_root == root:
                             continue
                         if by_id[other_id]["diameter"] != by_id[line_id]["diameter"]:
                             continue
                         if by_id[other_id]["diameter"] == "200":
                             continue
                         angle = deviation(line_id, other_id, node_id)
-                        if not passthrough and angle > MAX_MERGE_DEVIATION_DEGREES:
+                        aligned = passthrough or angle <= MAX_MERGE_DEVIATION_DEGREES
+                        # Un resto diminuto se integra aunque medie un codo: el
+                        # accesorio no obliga por sí solo a partir la cota.
+                        tiny = total < SHORT_RUN_METERS
+                        # Y un resto marginal frente al vecino tampoco merece
+                        # medida propia: 60 m y 1 m se acotan como 61 m.
+                        minor = aligned and total < totals[other_root] * MINOR_RUN_SHARE
+                        if not (tiny or minor):
                             continue
-                        key = (0 if passthrough else 1, angle)
+                        key = (0 if aligned else 1, angle, -totals[other_root])
                         if best is None or key < best[0]:
                             best = (key, other_id)
             if best:
@@ -247,7 +363,10 @@ def build_runs(lines):
         ordered = order_run(group, by_id)
         total = sum(by_id[m]["meters"] for m in ordered)
         label_line, label_point = run_midpoint(ordered, by_id, ends, total)
-        plan = next((by_id[m]["planMeters"] for m in ordered if by_id[m]["planMeters"]), None)
+        # Dirección de la tubería en el punto de la cota: el rótulo se dibuja con
+        # esa misma inclinación, para que se lea junto al tramo que mide.
+        start, end = ends[label_line]
+        angle = math.degrees(math.atan2(end[1] - start[1], end[0] - start[0]))
         runs.append({
             "id": f"TR-{number:03d}",
             "diameter": by_id[root]["diameter"],
@@ -256,9 +375,9 @@ def build_runs(lines):
             "labelLineId": label_line,
             "labelPoint": {"x": round(float(label_point[0]), 2),
                            "y": round(float(label_point[1]), 2)},
-            "identifier": next((by_id[m]["identifier"] for m in ordered
-                                if not by_id[m]["identifier"].startswith("AP-GEO")), by_id[root]["identifier"]),
-            "planMeters": plan,
+            "labelAngle": round(float(angle), 2),
+            "identifier": by_id[root]["identifier"],
+            "planMeters": None,
             "excludeFromProgress": by_id[root]["diameter"] == "200",
         })
     return runs
@@ -555,29 +674,10 @@ def generate(source_pdf: Path, output_path: Path):
     _, external_index = min(red_candidates)
     pipe_segments[external_index]["diameter"] = 200
 
-    # Correspondencia global uno-a-uno entre los 37 rótulos y su geometría más próxima.
-    assignments = {}
-    assignment_distances = {}
-    available = set(range(len(pipe_segments)))
-    ordered_tramos = sorted(tramos, key=lambda item: 0 if item["diameter"] == 200 else -(item["meters"] or 0))
-    for tramo in ordered_tramos:
-        candidates = []
-        for index in available:
-            segment = pipe_segments[index]
-            if segment["diameter"] != tramo["diameter"]:
-                continue
-            distance = point_segment_distance(tramo["labelPoint"], segment["start"], segment["end"])
-            candidates.append((distance, index))
-        if not candidates:
-            raise ValueError(f"No existe geometría disponible para {tramo['identifier']}")
-        distance, index = min(candidates)
-        assignments[index] = tramo
-        assignment_distances[tramo["identifier"]] = distance
-        available.remove(index)
-    if max(assignment_distances.values()) > 120:
-        raise ValueError(
-            f"Un rótulo quedó demasiado lejos de su tramo: {max(assignment_distances.values()):.2f} pt"
-        )
+    # Los rótulos del plano se emparejan más adelante, ya formados los tramos:
+    # un rótulo describe un tramo completo, no un segmento suelto.
+    for tramo in tramos:
+        tramo["labelDisplayPoint"] = to_display(tramo["labelPoint"])
 
     endpoints = []
     for segment_index, segment in enumerate(pipe_segments):
@@ -649,15 +749,13 @@ def generate(source_pdf: Path, output_path: Path):
     for index, segment in enumerate(pipe_segments):
         start = to_display(segment["start"])
         end = to_display(segment["end"])
-        tramo = assignments.get(index)
         diameter = int(segment["diameter"])
         kind = "collector" if diameter in (110, 200) else "branch"
         element_type = "externalPipe" if diameter == 200 else ("mainPipe" if diameter == 110 else "distributionPipe")
-        identifier = tramo["identifier"] if tramo else f"AP-GEO-{index + 1:03d}"
         # La longitud sale de la geometría georreferenciada, de accesorio a
-        # accesorio. El rótulo del plano se conserva solo como referencia: su
-        # asignación es un heurístico de cercanía y no concuerda con el trazo.
+        # accesorio. El código del plano se asigna después, ya formado el tramo.
         meters = float(np.linalg.norm(end - start)) / UNITS_PER_METER
+        identifier = f"AP-GEO-{index + 1:03d}"
         line = {
             "id": f"AAPP-{index + 1:03d}", "name": identifier,
             "from": node_id_by_endpoint[segment_endpoint_index[(index, 0)]],
@@ -665,9 +763,9 @@ def generate(source_pdf: Path, output_path: Path):
             "meters": round(meters, 2),
             "kind": kind, "elementType": element_type, "networkType": "AAPP",
             "diameter": str(diameter), "identifier": identifier,
-            "flow": tramo["flow"] if tramo else None,
+            "flow": None,
             "d": f"M {start[0]:.2f} {start[1]:.2f} L {end[0]:.2f} {end[1]:.2f}",
-            "planMeters": tramo["meters"] if tramo else None,
+            "planMeters": None,
             "hasDistance": True,
             "showDistanceLabel": False,
             "excludeFromProgress": diameter == 200,
@@ -675,10 +773,22 @@ def generate(source_pdf: Path, output_path: Path):
         lines.append(line)
 
     runs = build_runs(lines)
+    plan_assignment = assign_plan_codes(runs, tramos, lines)
+    # El plano manda sobre la agrupación: si su medida abarca dos tramos
+    # contiguos, se acotan juntos.
+    guided = plan_guided_merges(runs, lines)
+    if guided:
+        runs = build_runs(lines, [item["pair"] for item in guided])
+        plan_assignment = assign_plan_codes(runs, tramos, lines)
     run_by_line = {line_id: run for run in runs for line_id in run["lines"]}
     for line in lines:
         run = run_by_line[line["id"]]
         line["runId"] = run["id"]
+        # Todas las líneas de un tramo comparten su código: son una sola medida.
+        line["identifier"] = run["identifier"]
+        line["name"] = run["identifier"]
+        line["flow"] = run.get("flow")
+        line["planMeters"] = run.get("planMeters")
         # Un tramo, un rótulo: lo lleva la línea sobre la que cae el punto medio.
         line["showDistanceLabel"] = run["labelLineId"] == line["id"]
 
@@ -795,7 +905,7 @@ def generate(source_pdf: Path, output_path: Path):
     project = {
         "id": "builtin-costanera-acacias-aapp",
         "key": "costanera-acacias-aapp",
-        "revision": 7,
+        "revision": 9,
         "name": "Costanera_Acacias_AAPP",
         "networkType": "AAPP",
         "source": "builtin",
@@ -817,7 +927,8 @@ def generate(source_pdf: Path, output_path: Path):
                 for diameter in sorted({run["diameter"] for run in runs}, key=int, reverse=True)
             },
             "contractMeters": round(sum(run["meters"] for run in runs if not run["excludeFromProgress"]), 2),
-            "maximumLabelOffsetPdfPoints": round(max(assignment_distances.values()), 3),
+            "maximumPlanGapMeters": round(max((item["gap"] for item in plan_assignment if item["gap"] is not None), default=0.0), 2),
+            "maximumPlanLabelDistanceMeters": round(max(item["labelDistanceMeters"] for item in plan_assignment), 2),
         },
         "model": {"name": "Costanera_Acacias_AAPP", "networkType": "AAPP"},
         "snapshot": {
@@ -837,7 +948,8 @@ def generate(source_pdf: Path, output_path: Path):
                 "tramoCounts": {"110": 19, "90": 17, "200": 1},
                 "tramoTotalsMeters": {"110": 1295.34, "90": 1626.26},
                 "hydrantCount": 8, "excludedHydraulicNodes": ["J-64", "J-65", "J-67"],
-                "maximumLabelOffsetPdfPoints": round(max(assignment_distances.values()), 3),
+                "maximumPlanGapMeters": round(max((item["gap"] for item in plan_assignment if item["gap"] is not None), default=0.0), 2),
+            "maximumPlanLabelDistanceMeters": round(max(item["labelDistanceMeters"] for item in plan_assignment), 2),
                 "notes": [
                     "La tubería de 200 mm comienza en el macromedidor y se mantiene fuera del avance de la red.",
                     "M y el elemento circular perforado se modelan como un solo hidrante; su válvula se conserva separada.",
@@ -873,7 +985,9 @@ def main():
         "lines": len(project["snapshot"]["network"]["lines"]),
         "comments": len(project["snapshot"]["state"]["comments"]),
         "controlRmsMeters": project["snapshot"]["network"]["siteGeometry"]["controlRmsMeters"],
-        "maximumLabelOffsetPdfPoints": project["metadata"]["maximumLabelOffsetPdfPoints"],
+        "runs": project["metadata"]["runCount"],
+        "contractMeters": project["metadata"]["contractMeters"],
+        "maximumPlanGapMeters": project["metadata"]["maximumPlanGapMeters"],
     }, ensure_ascii=False, indent=2))
 
 
