@@ -30,6 +30,16 @@ CONTROLS = {
 }
 UNITS_PER_METER = 3.2
 DISPLAY_MARGIN_METERS = 24.0
+# Radio para dar por unidos dos extremos de tubería, en puntos del PDF.
+ENDPOINT_SNAP_POINTS = 2.0
+# Por debajo de esta longitud el trozo no merece ser un tramo propio.
+SHORT_RUN_METERS = 5.0
+# Un vecino continúa el trazo si el quiebre en el accesorio no pasa de esto.
+MAX_MERGE_DEVIATION_DEGREES = 45.0
+# Aparatos que representan por sí solos el final de la tubería.
+DEVICE_TYPES = {"valve", "valveBox", "hydrant", "macroMeter", "regulator", "airValve", "drainValve"}
+# Un extremo a menos de esta distancia de un aparato es su conexión, no un tapón.
+CAP_TO_DEVICE_UNITS = 16.0
 
 
 def color_tuple(value):
@@ -150,6 +160,151 @@ def build_satellite_layer(origin_east, origin_north):
         "transform": matrix,
         "rmsDisplayUnits": round(rms, 6),
     }
+
+
+def line_endpoints(line):
+    values = [float(v) for v in re.findall(r"-?\d+(?:\.\d+)?", line["d"])]
+    return np.asarray(values[:2]), np.asarray(values[2:4])
+
+
+def build_runs(lines):
+    """Agrupa las líneas en tramos, absorbiendo los trozos cortos en su vecino.
+
+    Un trozo de menos de SHORT_RUN_METERS no merece ser un tramo propio. Se
+    fusiona con el vecino del mismo diámetro que continúe más recto. Nunca se
+    cruza un cambio de diámetro ni se toca la tubería de 200 mm, que va fuera de
+    contrato. La fusión es de conteo y rotulado: los accesorios intermedios se
+    siguen dibujando donde están.
+    """
+    by_id = {line["id"]: line for line in lines}
+    ends = {line["id"]: line_endpoints(line) for line in lines}
+    incident = defaultdict(list)
+    for line in lines:
+        incident[line["from"]].append(line["id"])
+        incident[line["to"]].append(line["id"])
+
+    def direction_from(line_id, node_id):
+        start, end = ends[line_id]
+        near, far = (start, end) if by_id[line_id]["from"] == node_id else (end, start)
+        vector = far - near
+        return vector / (np.linalg.norm(vector) or 1.0)
+
+    def deviation(line_id, other_id, node_id):
+        cosine = float(np.clip(np.dot(direction_from(line_id, node_id),
+                                      direction_from(other_id, node_id)), -1, 1))
+        return 180.0 - math.degrees(math.acos(cosine))
+
+    parent = {line["id"]: line["id"] for line in lines}
+
+    def find(item):
+        while parent[item] != item:
+            parent[item] = parent[parent[item]]
+            item = parent[item]
+        return item
+
+    changed = True
+    while changed:
+        changed = False
+        members = defaultdict(list)
+        for line_id in parent:
+            members[find(line_id)].append(line_id)
+        short_first = sorted(
+            (root for root, group in members.items()
+             if by_id[root]["diameter"] != "200"
+             and sum(by_id[m]["meters"] for m in group) < SHORT_RUN_METERS),
+            key=lambda root: sum(by_id[m]["meters"] for m in members[root]),
+        )
+        for root in short_first:
+            group = set(members[root])
+            best = None
+            for line_id in group:
+                for node_id in (by_id[line_id]["from"], by_id[line_id]["to"]):
+                    passthrough = len(incident[node_id]) == 2
+                    for other_id in incident[node_id]:
+                        if other_id in group or find(other_id) == root:
+                            continue
+                        if by_id[other_id]["diameter"] != by_id[line_id]["diameter"]:
+                            continue
+                        if by_id[other_id]["diameter"] == "200":
+                            continue
+                        angle = deviation(line_id, other_id, node_id)
+                        if not passthrough and angle > MAX_MERGE_DEVIATION_DEGREES:
+                            continue
+                        key = (0 if passthrough else 1, angle)
+                        if best is None or key < best[0]:
+                            best = (key, other_id)
+            if best:
+                parent[find(best[1])] = root
+                changed = True
+
+    members = defaultdict(list)
+    for line_id in parent:
+        members[find(line_id)].append(line_id)
+
+    runs = []
+    for number, (root, group) in enumerate(
+            sorted(members.items(), key=lambda item: min(item[1])), 1):
+        ordered = order_run(group, by_id)
+        total = sum(by_id[m]["meters"] for m in ordered)
+        label_line, label_point = run_midpoint(ordered, by_id, ends, total)
+        plan = next((by_id[m]["planMeters"] for m in ordered if by_id[m]["planMeters"]), None)
+        runs.append({
+            "id": f"TR-{number:03d}",
+            "diameter": by_id[root]["diameter"],
+            "meters": round(total, 2),
+            "lines": ordered,
+            "labelLineId": label_line,
+            "labelPoint": {"x": round(float(label_point[0]), 2),
+                           "y": round(float(label_point[1]), 2)},
+            "identifier": next((by_id[m]["identifier"] for m in ordered
+                                if not by_id[m]["identifier"].startswith("AP-GEO")), by_id[root]["identifier"]),
+            "planMeters": plan,
+            "excludeFromProgress": by_id[root]["diameter"] == "200",
+        })
+    return runs
+
+
+def order_run(group, by_id):
+    """Ordena las líneas del tramo de punta a punta."""
+    if len(group) == 1:
+        return list(group)
+    touching = defaultdict(list)
+    for line_id in group:
+        touching[by_id[line_id]["from"]].append(line_id)
+        touching[by_id[line_id]["to"]].append(line_id)
+    terminals = [node for node, items in touching.items() if len(items) == 1]
+    current_node = terminals[0] if terminals else by_id[sorted(group)[0]]["from"]
+    remaining = set(group)
+    ordered = []
+    while remaining:
+        following = next((i for i in touching[current_node] if i in remaining), None)
+        if following is None:
+            ordered.extend(sorted(remaining))
+            break
+        ordered.append(following)
+        remaining.discard(following)
+        line = by_id[following]
+        current_node = line["to"] if line["from"] == current_node else line["from"]
+    return ordered
+
+
+def run_midpoint(ordered, by_id, ends, total):
+    """Punto medio del tramo completo, no de cada pedacito."""
+    walked = 0.0
+    half = total / 2.0
+    previous_node = None
+    for line_id in ordered:
+        line = by_id[line_id]
+        length = line["meters"]
+        if walked + length >= half or line_id == ordered[-1]:
+            start, end = ends[line_id]
+            if previous_node is not None and line["to"] == previous_node:
+                start, end = end, start
+            ratio = 0.5 if length <= 0 else min(1.0, max(0.0, (half - walked) / length))
+            return line_id, start + (end - start) * ratio
+        walked += length
+        previous_node = line["to"] if line["from"] != previous_node else line["from"]
+    return ordered[0], ends[ordered[0]][0]
 
 
 def centerline(pair):
@@ -427,10 +582,16 @@ def generate(source_pdf: Path, output_path: Path):
     endpoints = []
     for segment_index, segment in enumerate(pipe_segments):
         endpoints.extend(((segment_index, 0, segment["start"]), (segment_index, 1, segment["end"])))
+    # Los extremos que de verdad se tocan quedan a 0,3 pt; el siguiente salto
+    # está en 28 pt. Un radio de 18 pt equivalía a 4 m: unía accesorios
+    # separados por metros y, en los tramos cortos, los dos extremos de un mismo
+    # tramo caían en el mismo nodo y lo convertían en un bucle.
     endpoint_dsu = DSU(len(endpoints))
     for left in range(len(endpoints)):
         for right in range(left + 1, len(endpoints)):
-            if np.linalg.norm(endpoints[left][2] - endpoints[right][2]) <= 18:
+            if endpoints[left][0] == endpoints[right][0]:
+                continue  # un tramo nunca puede empezar y terminar en el mismo accesorio
+            if np.linalg.norm(endpoints[left][2] - endpoints[right][2]) <= ENDPOINT_SNAP_POINTS:
                 endpoint_dsu.union(left, right)
     endpoint_groups = defaultdict(list)
     for index in range(len(endpoints)):
@@ -493,20 +654,33 @@ def generate(source_pdf: Path, output_path: Path):
         kind = "collector" if diameter in (110, 200) else "branch"
         element_type = "externalPipe" if diameter == 200 else ("mainPipe" if diameter == 110 else "distributionPipe")
         identifier = tramo["identifier"] if tramo else f"AP-GEO-{index + 1:03d}"
+        # La longitud sale de la geometría georreferenciada, de accesorio a
+        # accesorio. El rótulo del plano se conserva solo como referencia: su
+        # asignación es un heurístico de cercanía y no concuerda con el trazo.
+        meters = float(np.linalg.norm(end - start)) / UNITS_PER_METER
         line = {
             "id": f"AAPP-{index + 1:03d}", "name": identifier,
             "from": node_id_by_endpoint[segment_endpoint_index[(index, 0)]],
             "to": node_id_by_endpoint[segment_endpoint_index[(index, 1)]],
-            "meters": tramo["meters"] if tramo else None,
+            "meters": round(meters, 2),
             "kind": kind, "elementType": element_type, "networkType": "AAPP",
             "diameter": str(diameter), "identifier": identifier,
             "flow": tramo["flow"] if tramo else None,
             "d": f"M {start[0]:.2f} {start[1]:.2f} L {end[0]:.2f} {end[1]:.2f}",
-            "hasDistance": tramo is not None and tramo["meters"] is not None,
-            "showDistanceLabel": tramo is not None and tramo["meters"] is not None,
-            "excludeFromProgress": tramo is None or tramo["meters"] is None or diameter == 200,
+            "planMeters": tramo["meters"] if tramo else None,
+            "hasDistance": True,
+            "showDistanceLabel": False,
+            "excludeFromProgress": diameter == 200,
         }
         lines.append(line)
+
+    runs = build_runs(lines)
+    run_by_line = {line_id: run for run in runs for line_id in run["lines"]}
+    for line in lines:
+        run = run_by_line[line["id"]]
+        line["runId"] = run["id"]
+        # Un tramo, un rótulo: lo lleva la línea sobre la que cae el punto medio.
+        line["showDistanceLabel"] = run["labelLineId"] == line["id"]
 
     # Ocho conjuntos grandes son los hidrantes confirmados (M + elemento perforado).
     hydrant_groups = sorted((group for group in groups if group["count"] >= 500), key=lambda group: (group["center"][1], group["center"][0]))
@@ -518,12 +692,16 @@ def generate(source_pdf: Path, output_path: Path):
         special_nodes.append({
             "id": f"H-{number:02d}", "x": round(float(center[0]), 2), "y": round(float(center[1]), 2),
             "radius": 6.5, "elementType": "hydrant", "displayName": "Hidrante",
-            "showLabel": True, "networkType": "AAPP",
+            # El círculo con la H ya lo identifica: el rótulo permanente sobra.
+            # Sigue apareciendo con el filtro «ID Accesorios».
+            "showLabel": False, "networkType": "AAPP",
         })
+        # El conjunto del hidrante se representa con su círculo: la válvula queda
+        # en el inventario pero no se dibuja, porque a 2,5 m se encimaba con él.
         special_nodes.append({
             "id": f"VH-{number:02d}", "x": round(float(center[0] - 8), 2), "y": round(float(center[1]), 2),
             "radius": 4.2, "elementType": "valve", "displayName": "Válvula de hidrante",
-            "showLabel": False, "networkType": "AAPP",
+            "showLabel": False, "hidden": True, "networkType": "AAPP",
         })
 
     def add_groups_by_count(counts, element_type, prefix, display_name):
@@ -542,6 +720,22 @@ def generate(source_pdf: Path, output_path: Path):
     add_groups_by_count({320}, "macroMeter", "MD", "Macromedidor")
     add_groups_by_count({55}, "regulator", "VR", "Válvula reguladora")
     nodes.extend(special_nodes)
+
+    # Un tubo que muere contra una válvula o un hidrante no lleva tapón: ese
+    # extremo es la conexión al aparato, y el símbolo del aparato ya lo dice.
+    # Dibujar ambos los encimaba.
+    device_points = [
+        (node["x"], node["y"]) for node in special_nodes
+        if node["elementType"] in DEVICE_TYPES and not node.get("hidden")
+    ]
+    for node in nodes:
+        if node["elementType"] != "cap":
+            continue
+        if any(math.dist((node["x"], node["y"]), point) <= CAP_TO_DEVICE_UNITS
+               for point in device_points):
+            node["elementType"] = "junction"
+            node["displayName"] = "Conexión a aparato"
+            node["hidden"] = True
 
     # C-02: configuración atípica junto a ap-110/ap-49; no se inventa accesorio.
     relevant = [line for line in lines if line["identifier"] in {"ap-110", "ap-49"}]
@@ -601,7 +795,7 @@ def generate(source_pdf: Path, output_path: Path):
     project = {
         "id": "builtin-costanera-acacias-aapp",
         "key": "costanera-acacias-aapp",
-        "revision": 3,
+        "revision": 7,
         "name": "Costanera_Acacias_AAPP",
         "networkType": "AAPP",
         "source": "builtin",
@@ -609,11 +803,20 @@ def generate(source_pdf: Path, output_path: Path):
         "metadata": {
             "sourceFile": source_pdf.name,
             "pipeGeometryCount": len(lines),
+            "runCount": len(runs),
             "labeledTramoCount": len(tramos),
             "accessoryNodeCount": len([node for node in nodes if not node.get("hidden")]),
             "hydrantCount": 8,
             "controlPointCount": 8,
             "controlRmsMeters": round(rms, 6),
+            "endpointSnapPoints": ENDPOINT_SNAP_POINTS,
+            "shortRunMeters": SHORT_RUN_METERS,
+            # Longitudes tomadas de la geometría georreferenciada, no del rótulo.
+            "metersByDiameter": {
+                diameter: round(sum(run["meters"] for run in runs if run["diameter"] == diameter), 2)
+                for diameter in sorted({run["diameter"] for run in runs}, key=int, reverse=True)
+            },
+            "contractMeters": round(sum(run["meters"] for run in runs if not run["excludeFromProgress"]), 2),
             "maximumLabelOffsetPdfPoints": round(max(assignment_distances.values()), 3),
         },
         "model": {"name": "Costanera_Acacias_AAPP", "networkType": "AAPP"},
@@ -621,6 +824,7 @@ def generate(source_pdf: Path, output_path: Path):
             "schemaVersion": 2,
             "network": {
                 "type": "AAPP", "definition": definition, "nodes": nodes, "lines": lines,
+                "runs": runs,
                 "viewBox": view_box, "georeference": georeference,
                 "routeEdges": [], "siteGeometry": site_geometry,
             },

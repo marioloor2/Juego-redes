@@ -127,6 +127,10 @@
     .node.aapp-accessory .accessory-flange { stroke-width: 2.9; stroke-linecap: butt; }
     .node.aapp-accessory .accessory-fill { fill: currentColor; stroke: currentColor; stroke-width: 1.4; pointer-events: none; }
     .node.aapp-accessory .accessory-text { fill: currentColor; stroke: none; font-size: 6px; font-weight: 800; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+    /* Las tees van en un rojo más oscuro para distinguirlas de los codos. */
+    .node.aapp-accessory[data-node-type="teeEqual"],
+    .node.aapp-accessory[data-node-type="teeReducer"],
+    .node.aapp-accessory[data-node-type="cross"] { stroke: #8f1414; color: #8f1414; }
     .node.aapp-accessory.active { color: #15803d; stroke: #16a34a; }
     .headwall-shape { fill: none; stroke: #111; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
     .headwall-hit { fill: transparent; stroke: transparent; pointer-events: all; }
@@ -142,11 +146,22 @@
     .node-label.camera { font-size: 16px; }
     .node-label.sump, .node-label.discharge { font-size: 11px; font-weight: 600; fill: #1f2937; stroke-width: 4px; }
     .node-label.discharge { fill: #1d4ed8; }
+    /* Los nombres de accesorio son largos y van muchos juntos: letra menor. */
+    .node-label.accessory-id { font-size: 8px; font-weight: 700; fill: #1f2937; stroke-width: 3.5px; }
     .distance-group { cursor: pointer; }
     .distance-hit { fill: transparent; pointer-events: all; }
     .distance-text { font-weight: 700; fill: #6b7280; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: #fafafa; stroke-width: 3.5px; stroke-linejoin: round; opacity: .85; }
     .distance-text.collector { font-size: 11px; }
     .distance-text.branch { font-size: 9px; opacity: .62; }
+    /* En AAPP la cota se lee en obra: horizontal, opaca y con el tramo nombrado. */
+    .distance-plate { fill: #fff; stroke: #cbd5e1; stroke-width: .8; }
+    .distance-group.flat .distance-text { fill: #111827; opacity: 1; stroke: none; font-size: 9.5px; }
+    .distance-group.flat .distance-text .run-name { fill: #b91c1c; }
+    .run-end { fill: none; stroke: #15803d; stroke-width: 3.4; stroke-linecap: round; opacity: 0; transition: opacity .12s ease; pointer-events: none; }
+    .run-end.visible { opacity: 1; }
+    html[data-theme="night"] .distance-plate { fill: #0b1220; stroke: #475569; }
+    html[data-theme="night"] .distance-group.flat .distance-text { fill: #f8fafc; }
+    html[data-theme="night"] .distance-group.flat .distance-text .run-name { fill: #fb7185; }
     .segment-guides { opacity: 0; pointer-events: none; transition: opacity .15s ease; }
     .segment-guides.visible { opacity: 1; }
     .segment-guide { stroke: #9ca3af; stroke-width: 1.6; }
@@ -383,6 +398,9 @@
     html[data-theme="night"] .node { fill: #f8fafc; stroke: #0f172a; }
     /* Sobre fondo oscuro el rojo pleno se apaga; se aclara sin cambiar de color. */
     html[data-theme="night"] .node.aapp-accessory { stroke: #fb7185; color: #fb7185; }
+    html[data-theme="night"] .node.aapp-accessory[data-node-type="teeEqual"],
+    html[data-theme="night"] .node.aapp-accessory[data-node-type="teeReducer"],
+    html[data-theme="night"] .node.aapp-accessory[data-node-type="cross"] { stroke: #d81f45; color: #d81f45; }
     html[data-theme="night"] .node.aapp-accessory.active { stroke: #22c55e; color: #22c55e; }
     html[data-theme="night"] .node.active { fill: #22c55e; }
     html[data-theme="night"] .camera-ring { stroke: #fb7185; }
@@ -394,6 +412,7 @@
     }
     html[data-theme="night"] .node-label.sump,
     html[data-theme="night"] .node-label.discharge { fill: #e2e8f0; }
+    html[data-theme="night"] .node-label.accessory-id { fill: #e2e8f0; }
     html[data-theme="night"] .distance-text {
       fill: #cbd5e1;
       stroke: #070b14;
@@ -1534,6 +1553,24 @@
     }
 
     const nodeMap = new Map(nodeDefs.map(n => [n.id, n]));
+
+    // Tramos del modelo AAPP: varias líneas cortas pueden formar un solo tramo,
+    // con una sola longitud, un solo rótulo y una sola marca de avance.
+    const runDefs = Array.isArray(versionBootstrap?.network?.runs)
+      ? versionBootstrap.network.runs
+      : [];
+    const runById = new Map(runDefs.map(run => [run.id, run]));
+    const runOfLine = new Map();
+    runDefs.forEach(run => (run.lines || []).forEach(lineId => runOfLine.set(lineId, run.id)));
+
+    function getRunFor(definition) {
+      return runById.get(runOfLine.get(definition?.id)) || null;
+    }
+
+    function getRunLineIds(lineId) {
+      const run = runById.get(runOfLine.get(lineId));
+      return run && Array.isArray(run.lines) && run.lines.length > 1 ? run.lines : null;
+    }
     const validCameras = nodeDefs.filter(n => n.elementType === 'chamber').map(n => n.id);
 
     function getNetworkInventory() {
@@ -1550,6 +1587,31 @@
     pointCountsText.title = NETWORK_TYPE === 'AAPP'
       ? 'Mostrar u ocultar los accesorios de la red potable'
       : 'Mostrar u ocultar los ID de cámaras, sumideros y descargas';
+
+    // En AAPP el nombre de cada pieza («Codo 90° 110», «Tee110/90») se activa
+    // aparte: son más de cien rótulos y estorban en la vista normal.
+    const ACCESSORY_ID_FILTER_KEY = 'redVerde_aapp_accessory_ids_v1';
+    let accessoryIdCheckbox = null;
+    if (NETWORK_TYPE === 'AAPP') {
+      const accessoryIdRow = document.createElement('label');
+      accessoryIdRow.className = 'filter-row';
+      accessoryIdRow.setAttribute('for', 'accessoryIdFilterCheckbox');
+      accessoryIdRow.innerHTML = '<input id="accessoryIdFilterCheckbox" type="checkbox" />'
+        + '<span title="Mostrar de qué se trata cada accesorio">ID Accesorios</span>';
+      document.querySelector('.model-filter-stack').appendChild(accessoryIdRow);
+      accessoryIdCheckbox = accessoryIdRow.querySelector('input');
+      try {
+        accessoryIdCheckbox.checked = localStorage.getItem(ACCESSORY_ID_FILTER_KEY) === 'true';
+      } catch {}
+      accessoryIdCheckbox.addEventListener('change', () => {
+        try {
+          localStorage.setItem(ACCESSORY_ID_FILTER_KEY, String(accessoryIdCheckbox.checked));
+        } catch {}
+        placeLabels();
+        // placeLabels reconstruye los rótulos: hay que devolverles el estirado.
+        updateAccessoryZoom();
+      });
+    }
 
     function validateAallModel() {
       const errors = [];
@@ -1767,9 +1829,19 @@
     function addDistanceLabel(measure, def) {
       if (!hasKnownLength(def) || def.showDistanceLabel === false) return null;
       const total = measure.getTotalLength();
-      const m = total / 2;
-      const textValue = `${formatLength(def.meters)} m`;
-      const width = Math.max(34, textValue.length * 7.8);
+      // Un tramo, un rótulo: la longitud y el punto medio son los del tramo
+      // completo, no los del pedacito que casualmente lleva la etiqueta.
+      const run = getRunFor(def);
+      const labelMeters = run ? run.meters : def.meters;
+      const m = run?.labelPoint
+        ? closestLengthOnPath(measure, run.labelPoint)
+        : total / 2;
+      // En obra la cota tiene que decir de qué tramo habla y leerse derecha.
+      const flat = NETWORK_TYPE === 'AAPP';
+      const runName = run && !/^AP-GEO/.test(run.identifier || '') ? run.identifier : '';
+      const measureValue = `${formatLength(labelMeters)} m`;
+      const textValue = flat && runName ? `${runName} · ${measureValue}` : measureValue;
+      const width = Math.max(34, textValue.length * (flat ? 5.6 : 7.8));
       let p = measure.getPointAtLength(m);
       let before = measure.getPointAtLength(Math.max(0, m - 2));
       let after = measure.getPointAtLength(Math.min(total, m + 2));
@@ -1777,7 +1849,7 @@
       let x;
       let y;
 
-      const branchGeometry = getBranchLabelGeometry(def);
+      const branchGeometry = flat ? null : getBranchLabelGeometry(def);
       if (branchGeometry) {
         const { anchor, outer } = branchGeometry;
         const dx = outer.x - anchor.x;
@@ -1802,16 +1874,32 @@
       let deg = ang * 180 / Math.PI;
       if (deg > 90 || deg < -90) deg += 180;
       const group = E('g', {
-        class: 'distance-group',
-        transform: `rotate(${deg} ${x} ${y})`,
+        class: `distance-group${flat ? ' flat' : ''}`,
+        transform: flat ? '' : `rotate(${deg} ${x} ${y})`,
         'data-line-id': def.id,
         'data-label-outer-node-id': branchGeometry?.outer?.id || '',
         role: 'button',
         'aria-label': `Longitud total de ${getLineDisplayName(def)}: ${textValue}`
       });
-      const hit = E('rect', { class: 'distance-hit', x: x - width/2, y: y - 10, width, height: 20, rx: 5, ry: 5 });
+      const height = flat ? 15 : 20;
+      if (flat) {
+        // Placa opaca: sobre la imagen satelital un texto con halo no basta.
+        group.appendChild(E('rect', {
+          class: 'distance-plate',
+          x: x - width / 2, y: y - height / 2, width, height, rx: 4, ry: 4
+        }));
+      }
+      const hit = E('rect', { class: 'distance-hit', x: x - width/2, y: y - height/2, width, height, rx: 5, ry: 5 });
       const label = E('text', { class: `distance-text ${def.kind}`, x, y });
-      label.textContent = textValue;
+      if (flat && runName) {
+        const name = E('tspan', { class: 'run-name' });
+        name.textContent = `${runName} `;
+        const value = E('tspan');
+        value.textContent = `· ${measureValue}`;
+        label.append(name, value);
+      } else {
+        label.textContent = textValue;
+      }
       let timer = null;
       let lastTap = 0;
       group.addEventListener('pointerup', (event) => {
@@ -2011,6 +2099,9 @@
     }
 
     function layoutBranchDistanceLabels() {
+      // Reacomodo pensado para los tirantes de AALL. En AAPP los 90 mm también
+      // son «branch» y esto les devolvía la rotación que no queremos.
+      if (NETWORK_TYPE !== 'AALL') return;
       const placedLabels = [];
       const factors = [1, 1 + BRANCH_STRETCH_MAX / 2, 1 + BRANCH_STRETCH_MAX];
       const sampledPathsByFactor = buildBranchLabelPathSamples(factors);
@@ -2215,7 +2306,7 @@
         if (commentPlacementMode) return;
         event.preventDefault();
         event.stopPropagation();
-        toggleManualSegment(state.definition.id, segmentIndex);
+        toggleManualRun(state.definition.id, segmentIndex);
       };
       group.addEventListener('pointerdown', event => {
         if (commentPlacementMode) return;
@@ -2287,8 +2378,197 @@
     // Proporción de zoom a la que el accesorio alcanza su tamaño completo.
     const ACCESSORY_FULL_DETAIL_RATIO = .38;
     const ACCESSORY_MIN_SCALE = .52;
+    // Tamaño en el acercamiento máximo: menor que el pleno, para ver el conjunto.
+    const ACCESSORY_CLOSEUP_SCALE = .62;
     const ACCESSORY_MIN_OPACITY = .5;
     const aappAccessoryAnchors = [];
+    // Hay accesorios a un metro uno de otro: a cualquier tamaño legible se pisan.
+    // Al acercar el zoom el dibujo se estira localmente para separarlos. Pierde
+    // escala a propósito; las longitudes rotuladas siguen siendo las reales.
+    // Separación mínima entre accesorios contiguos, en unidades de dibujo.
+    const ACCESSORY_MIN_EDGE = 21;
+    const ACCESSORY_MAX_GROWTH = 18;
+    const aappSpread = new Map();
+    let aappSpreadLevel = 0;
+    let aappLabelLevel = 0;
+
+    // Los extremos del trazo no coinciden exactamente con el centro del nodo.
+    // Se conservan tal cual: redibujar desde el nodo torcería la tubería.
+    const aappLineEnds = new Map();
+
+    function aappEndsOf(definition) {
+      const cached = aappLineEnds.get(definition.id);
+      if (cached) return cached;
+      const values = (definition.d.match(/-?[\d.]+/g) || []).map(Number);
+      let a = { x: values[0], y: values[1] };
+      let b = { x: values[2], y: values[3] };
+      const from = nodeMap.get(definition.from);
+      const to = nodeMap.get(definition.to);
+      if (from && to) {
+        const straight = Math.hypot(a.x - from.x, a.y - from.y) + Math.hypot(b.x - to.x, b.y - to.y);
+        const swapped = Math.hypot(b.x - from.x, b.y - from.y) + Math.hypot(a.x - to.x, a.y - to.y);
+        if (swapped < straight) [a, b] = [b, a];
+      }
+      const ends = { from: a, to: b };
+      aappLineEnds.set(definition.id, ends);
+      return ends;
+    }
+
+    function addAappSpread(nodeId, dx, dy) {
+      const current = aappSpread.get(nodeId) || { dx: 0, dy: 0 };
+      current.dx += dx;
+      current.dy += dy;
+      aappSpread.set(nodeId, current);
+    }
+
+    // Solo se alarga el tramo corto, y siempre a lo largo de su propio eje: el
+    // lado que cuelga se traslada en bloque, así que ninguna otra tubería cambia
+    // de dirección ni de longitud. Nada queda torcido ni desalineado.
+    //
+    // Únicamente sirve en aristas puente. Si el tramo corto forma parte de un
+    // anillo, alargarlo obligaría a inclinar las demás y se deja como está.
+    function computeAappSpread() {
+      if (NETWORK_TYPE !== 'AAPP') return;
+      const neighbours = new Map();
+      const addNeighbour = (nodeId, entry) => {
+        const list = neighbours.get(nodeId);
+        if (list) list.push(entry);
+        else neighbours.set(nodeId, [entry]);
+      };
+      lineDefs.forEach(line => {
+        if (line.from === line.to) return;
+        addNeighbour(line.from, { other: line.to, lineId: line.id });
+        addNeighbour(line.to, { other: line.from, lineId: line.id });
+      });
+
+      const bridges = findBridgeLines(neighbours);
+      const sideOf = (startId, blockedLineId) => {
+        const reached = new Set([startId]);
+        const queue = [startId];
+        while (queue.length) {
+          const current = queue.shift();
+          (neighbours.get(current) || []).forEach(({ other, lineId }) => {
+            if (lineId === blockedLineId || reached.has(other)) return;
+            reached.add(other);
+            queue.push(other);
+          });
+        }
+        return reached;
+      };
+
+      lineDefs.forEach(line => {
+        if (!bridges.has(line.id)) return;
+        const ends = aappEndsOf(line);
+        const dx = ends.to.x - ends.from.x;
+        const dy = ends.to.y - ends.from.y;
+        const length = Math.hypot(dx, dy);
+        if (length < .001 || length >= ACCESSORY_MIN_EDGE) return;
+        const growth = Math.min(ACCESSORY_MIN_EDGE - length, ACCESSORY_MAX_GROWTH);
+        // Se mueve el lado más pequeño: menos dibujo desplazado.
+        const ahead = sideOf(line.to, line.id);
+        const behind = sideOf(line.from, line.id);
+        const movesAhead = ahead.size <= behind.size;
+        const group = movesAhead ? ahead : behind;
+        const sign = movesAhead ? 1 : -1;
+        const stepX = dx / length * growth * sign;
+        const stepY = dy / length * growth * sign;
+        group.forEach(nodeId => addAappSpread(nodeId, stepX, stepY));
+      });
+
+      // Hidrantes y válvulas no son extremos de tubería: acompañan a su vecino.
+      nodeDefs.forEach(node => {
+        if (neighbours.has(node.id) || node.hidden) return;
+        let closest = null;
+        let bestDistance = Infinity;
+        neighbours.forEach((_, pipeNodeId) => {
+          const pipeNode = nodeMap.get(pipeNodeId);
+          if (!pipeNode) return;
+          const distance = Math.hypot(pipeNode.x - node.x, pipeNode.y - node.y);
+          if (distance >= bestDistance) return;
+          bestDistance = distance;
+          closest = pipeNodeId;
+        });
+        const offset = closest && aappSpread.get(closest);
+        if (offset) addAappSpread(node.id, offset.dx, offset.dy);
+      });
+    }
+
+    // Puentes de Tarjan: aristas cuya eliminación parte el grafo.
+    function findBridgeLines(neighbours) {
+      const discovery = new Map();
+      const low = new Map();
+      const bridges = new Set();
+      let counter = 0;
+      neighbours.forEach((_, rootId) => {
+        if (discovery.has(rootId)) return;
+        const stack = [{ nodeId: rootId, viaLineId: null, index: 0 }];
+        discovery.set(rootId, counter);
+        low.set(rootId, counter);
+        counter += 1;
+        while (stack.length) {
+          const frame = stack[stack.length - 1];
+          const edges = neighbours.get(frame.nodeId) || [];
+          if (frame.index >= edges.length) {
+            stack.pop();
+            const parent = stack[stack.length - 1];
+            if (parent) {
+              low.set(parent.nodeId, Math.min(low.get(parent.nodeId), low.get(frame.nodeId)));
+              if (low.get(frame.nodeId) > discovery.get(parent.nodeId)) bridges.add(frame.viaLineId);
+            }
+            continue;
+          }
+          const { other, lineId } = edges[frame.index];
+          frame.index += 1;
+          if (lineId === frame.viaLineId) continue;
+          if (discovery.has(other)) {
+            low.set(frame.nodeId, Math.min(low.get(frame.nodeId), discovery.get(other)));
+            continue;
+          }
+          discovery.set(other, counter);
+          low.set(other, counter);
+          counter += 1;
+          stack.push({ nodeId: other, viaLineId: lineId, index: 0 });
+        }
+      });
+      return bridges;
+    }
+
+    function aappSpreadAt(nodeId, level) {
+      const node = nodeMap.get(nodeId);
+      const offset = aappSpread.get(nodeId);
+      if (!node) return { x: 0, y: 0 };
+      if (!offset || !level) return { x: node.x, y: node.y };
+      return { x: node.x + offset.dx * level, y: node.y + offset.dy * level };
+    }
+
+    function applyAappSpread(level) {
+      if (!aappSpread.size) return;
+      lineStates.forEach(state => {
+        const definition = state.definition;
+        const ends = aappEndsOf(definition);
+        const fromOffset = aappSpread.get(definition.from) || { dx: 0, dy: 0 };
+        const toOffset = aappSpread.get(definition.to) || { dx: 0, dy: 0 };
+        const a = { x: ends.from.x + fromOffset.dx * level, y: ends.from.y + fromOffset.dy * level };
+        const b = { x: ends.to.x + toOffset.dx * level, y: ends.to.y + toOffset.dy * level };
+        const path = `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} L ${b.x.toFixed(2)} ${b.y.toFixed(2)}`;
+        [state.basePath, state.measurePath, state.fullOverlay, state.hitPath,
+          ...state.segmentOverlays].forEach(element => element?.setAttribute('d', path));
+        if (!state.distanceGroup) return;
+        const from = aappSpread.get(definition.from) || { dx: 0, dy: 0 };
+        const to = aappSpread.get(definition.to) || { dx: 0, dy: 0 };
+        const shiftX = (from.dx + to.dx) / 2 * level;
+        const shiftY = (from.dy + to.dy) / 2 * level;
+        const base = state.distanceGroupBaseTransform || '';
+        state.distanceGroup.setAttribute('transform',
+          level ? `translate(${shiftX.toFixed(2)} ${shiftY.toFixed(2)}) ${base}`.trim() : base);
+      });
+      segmentGuidesGroup.querySelectorAll('.run-end').forEach(marker => {
+        const offset = aappSpread.get(marker.getAttribute('data-node-id'));
+        if (!offset || !level) marker.removeAttribute('transform');
+        else marker.setAttribute('transform',
+          `translate(${(offset.dx * level).toFixed(2)} ${(offset.dy * level).toFixed(2)})`);
+      });
+    }
 
     function applyViewBox() {
       svg.setAttribute('viewBox', `${currentViewBox.x} ${currentViewBox.y} ${currentViewBox.width} ${currentViewBox.height}`);
@@ -2306,12 +2586,33 @@
       const level = Math.max(0, Math.min(1,
         (1 - ratio) / (1 - ACCESSORY_FULL_DETAIL_RATIO)
       ));
-      const scale = (ACCESSORY_MIN_SCALE + (1 - ACCESSORY_MIN_SCALE) * level).toFixed(3);
+      let size = ACCESSORY_MIN_SCALE + (1 - ACCESSORY_MIN_SCALE) * level;
+      // Pasado el punto de detalle completo la pieza ya se ve grande y empieza a
+      // estorbar: se encoge hasta el zoom máximo para dejar ver el conjunto.
+      const closestRatio = MIN_VIEW_BOX_WIDTH / INITIAL_VIEW_BOX.width;
+      if (ratio < ACCESSORY_FULL_DETAIL_RATIO) {
+        const deep = Math.max(0, Math.min(1,
+          (ACCESSORY_FULL_DETAIL_RATIO - ratio) / (ACCESSORY_FULL_DETAIL_RATIO - closestRatio)
+        ));
+        size = 1 - (1 - ACCESSORY_CLOSEUP_SCALE) * deep;
+      }
+      const scale = size.toFixed(3);
       const opacity = (ACCESSORY_MIN_OPACITY + (1 - ACCESSORY_MIN_OPACITY) * level).toFixed(3);
+      // El estirado entra con el mismo avance del zoom que el detalle completo.
+      const spreadLevel = level;
+      aappSpreadLevel = spreadLevel;
+      applyAappSpread(spreadLevel);
       aappAccessoryAnchors.forEach(anchor => {
-        anchor.element.setAttribute('transform', `translate(${anchor.x} ${anchor.y}) scale(${scale})`);
+        const point = aappSpreadAt(anchor.id, spreadLevel);
+        anchor.element.setAttribute('transform',
+          `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)}) scale(${scale})`);
         anchor.element.setAttribute('opacity', opacity);
       });
+      // Recolocar los rótulos es costoso: solo cuando el estirado cambió de veras.
+      if (Math.abs(spreadLevel - aappLabelLevel) > .18) {
+        aappLabelLevel = spreadLevel;
+        placeLabels();
+      }
     }
 
     function updateGuideVisibility() {
@@ -2578,6 +2879,21 @@
         }
       });
       return groups;
+    }
+
+    // Al tocar la línea se marca el tramo entero: un tramo fusionado nunca puede
+    // quedar a medias.
+    function toggleManualRun(lineId, segmentIndex) {
+      const members = getRunLineIds(lineId);
+      if (!members) {
+        toggleManualSegment(lineId, segmentIndex);
+        return;
+      }
+      const shouldMark = !members.some(memberId => findManualActivity(memberId, 0));
+      members.forEach(memberId => {
+        if (Boolean(findManualActivity(memberId, 0)) === shouldMark) return;
+        toggleManualSegment(memberId, 0);
+      });
     }
 
     function toggleManualSegment(lineId, segmentIndex) {
@@ -3163,6 +3479,117 @@
       saveActivities();
       updateProgressPanel();
       checkVictory();
+      updateRunEndMarkers();
+    }
+
+    // Las cotas planas nacen todas al mismo costado de su tubería y se pisan
+    // entre sí. Se les busca sitio libre, como a los rótulos de nodo.
+    function layoutFlatDistanceLabels() {
+      if (NETWORK_TYPE !== 'AAPP') return;
+      const intersects = (a, b, padding = 0) => !(
+        a.right + padding < b.left || a.left - padding > b.right
+        || a.bottom + padding < b.top || a.top - padding > b.bottom
+      );
+      const accessoryBoxes = nodeDefs
+        .filter(node => !node.hidden && node.elementType !== 'junction')
+        .map(node => ({
+          left: node.x - 12, right: node.x + 12, top: node.y - 12, bottom: node.y + 12
+        }));
+      const placed = [];
+      const candidates = [[0, 0]];
+      [16, 28, 42].forEach(distance => {
+        for (let step = 0; step < 8; step += 1) {
+          const angle = (step / 8) * Math.PI * 2;
+          candidates.push([Math.cos(angle) * distance * 1.3, Math.sin(angle) * distance]);
+        }
+      });
+
+      lineStates.forEach(state => {
+        const group = state.distanceGroup;
+        if (!group || !group.classList.contains('flat')) return;
+        const plate = group.querySelector('.distance-plate');
+        if (!plate) return;
+        const box = {
+          left: Number(plate.getAttribute('x')),
+          top: Number(plate.getAttribute('y')),
+          right: Number(plate.getAttribute('x')) + Number(plate.getAttribute('width')),
+          bottom: Number(plate.getAttribute('y')) + Number(plate.getAttribute('height'))
+        };
+        let best = [0, 0];
+        let bestScore = Infinity;
+        for (const [dx, dy] of candidates) {
+          const moved = {
+            left: box.left + dx, right: box.right + dx,
+            top: box.top + dy, bottom: box.bottom + dy
+          };
+          let score = Math.hypot(dx, dy) * .01;
+          placed.forEach(other => { if (intersects(moved, other, 2)) score += 1000; });
+          accessoryBoxes.forEach(other => { if (intersects(moved, other)) score += 300; });
+          if (score >= bestScore) continue;
+          bestScore = score;
+          best = [dx, dy];
+          if (score < 1) break;
+        }
+        placed.push({
+          left: box.left + best[0], right: box.right + best[0],
+          top: box.top + best[1], bottom: box.bottom + best[1]
+        });
+        const transform = best[0] || best[1]
+          ? `translate(${best[0].toFixed(2)} ${best[1].toFixed(2)})`
+          : '';
+        state.distanceGroupBaseTransform = transform;
+        if (transform) group.setAttribute('transform', transform);
+        else group.removeAttribute('transform');
+      });
+    }
+
+    // Marca de inicio y fin del tramo: al marcarlo hay que ver dónde empieza y
+    // dónde termina, que es lo que se replantea en obra.
+    function buildRunEndMarkers() {
+      if (NETWORK_TYPE !== 'AAPP' || !runDefs.length) return;
+      runDefs.forEach(run => {
+        const appearances = new Map();
+        run.lines.forEach(lineId => {
+          const definition = lineDefs.find(line => line.id === lineId);
+          if (!definition) return;
+          [definition.from, definition.to].forEach(nodeId =>
+            appearances.set(nodeId, (appearances.get(nodeId) || 0) + 1));
+        });
+        const terminals = [...appearances.entries()].filter(([, count]) => count === 1).map(([id]) => id);
+        terminals.forEach(nodeId => {
+          const definition = lineDefs.find(line =>
+            run.lines.includes(line.id) && (line.from === nodeId || line.to === nodeId));
+          if (!definition) return;
+          const ends = aappEndsOf(definition);
+          const near = definition.from === nodeId ? ends.from : ends.to;
+          const far = definition.from === nodeId ? ends.to : ends.from;
+          const dx = far.x - near.x;
+          const dy = far.y - near.y;
+          const length = Math.hypot(dx, dy) || 1;
+          const nx = -dy / length * 9;
+          const ny = dx / length * 9;
+          segmentGuidesGroup.appendChild(E('path', {
+            class: 'run-end',
+            'data-run-id': run.id,
+            'data-node-id': nodeId,
+            d: `M ${(near.x - nx).toFixed(2)} ${(near.y - ny).toFixed(2)} `
+              + `L ${(near.x + nx).toFixed(2)} ${(near.y + ny).toFixed(2)}`
+          }));
+        });
+      });
+    }
+
+    function updateRunEndMarkers() {
+      if (NETWORK_TYPE !== 'AAPP' || !runDefs.length) return;
+      const activeRuns = new Set();
+      lineStates.forEach(state => {
+        if (!state.segmentOverlays.some((_, index) => isSegmentActive(state, index))) return;
+        const runId = runOfLine.get(state.definition.id);
+        if (runId) activeRuns.add(runId);
+      });
+      segmentGuidesGroup.querySelectorAll('.run-end').forEach(marker => {
+        marker.classList.toggle('visible', activeRuns.has(marker.getAttribute('data-run-id')));
+      });
     }
 
     function setGroupActivitiesMessage(message='', type='') {
@@ -3544,7 +3971,7 @@
         lastLineTap = now;
         lineTapTimer = setTimeout(() => {
           lineTapTimer = null;
-          toggleManualSegment(def.id, index);
+          toggleManualRun(def.id, index);
         }, DOUBLE_TAP_DELAY);
       });
       hit.addEventListener('dblclick', (event) => {
@@ -3781,7 +4208,7 @@
           nodeContainer = E('g', { transform: `translate(${n.x} ${n.y})` });
           shape = buildAappAccessory(n);
           nodeContainer.appendChild(shape);
-          aappAccessoryAnchors.push({ element: nodeContainer, x: n.x, y: n.y });
+          aappAccessoryAnchors.push({ element: nodeContainer, id: n.id, x: n.x, y: n.y });
         } else if (n.elementType === 'sump') {
           shape = E('rect', {
             class: 'node sump',
@@ -3839,8 +4266,9 @@
         a.right + padding < b.left || a.left - padding > b.right
         || a.bottom + padding < b.top || a.top - padding > b.bottom
       );
+      const showAccessoryIds = NETWORK_TYPE === 'AAPP' && accessoryIdCheckbox?.checked === true;
       const boundsAt = (x, y, textValue, elementType) => {
-        const fontSize = elementType === 'chamber' ? 16 : 11;
+        const fontSize = elementType === 'chamber' ? 16 : (showAccessoryIds ? 8 : 11);
         const width = Math.max(fontSize * 1.6, textValue.length * fontSize * 0.62);
         const height = fontSize * 1.25;
         return {
@@ -3852,15 +4280,21 @@
       };
       // Los obstáculos se calculan una sola vez. Cada rótulo prueba decenas de
       // posiciones y volver a muestrear las tuberías en cada intento no escala.
+      // El dibujo puede estar estirado: los rótulos se ubican donde las piezas
+      // se ven ahora, no donde estarían a escala real.
+      const nodePointOf = node => (NETWORK_TYPE === 'AAPP'
+        ? aappSpreadAt(node.id, aappSpreadLevel)
+        : { x: node.x, y: node.y });
       const nodeObstacles = nodeDefs.map(node => {
         // El accesorio AAPP dibuja brazos con brida más allá de su radio nominal.
         const radius = Math.max(NETWORK_TYPE === 'AAPP' ? 12 : 8, Number(node.radius) || 0);
+        const point = nodePointOf(node);
         return {
           id: node.id,
-          left: node.x - radius,
-          right: node.x + radius,
-          top: node.y - radius,
-          bottom: node.y + radius
+          left: point.x - radius,
+          right: point.x + radius,
+          top: point.y - radius,
+          bottom: point.y + radius
         };
       });
       const pipeSampleGroups = [];
@@ -3895,36 +4329,77 @@
         });
       });
 
+      // Rejilla espacial: con el filtro de accesorios hay más de cien rótulos y
+      // recorrer todas las muestras de tubería por candidato no termina nunca.
+      const GRID = 40;
+      const cellKey = (x, y) => `${Math.floor(x / GRID)}|${Math.floor(y / GRID)}`;
+      const pipeGrid = new Map();
+      const putInGrid = (grid, key, value) => {
+        const bucket = grid.get(key);
+        if (bucket) bucket.push(value);
+        else grid.set(key, [value]);
+      };
+      pipeSampleGroups.forEach((samples, groupIndex) => {
+        samples.forEach(point => putInGrid(pipeGrid, cellKey(point.x, point.y), { point, groupIndex }));
+      });
+      const nodeGrid = new Map();
+      nodeObstacles.forEach(bounds => {
+        for (let cx = Math.floor(bounds.left / GRID); cx <= Math.floor(bounds.right / GRID); cx += 1) {
+          for (let cy = Math.floor(bounds.top / GRID); cy <= Math.floor(bounds.bottom / GRID); cy += 1) {
+            putInGrid(nodeGrid, `${cx}|${cy}`, bounds);
+          }
+        }
+      });
+      const cellsAround = bounds => {
+        const keys = [];
+        for (let cx = Math.floor((bounds.left - 5) / GRID); cx <= Math.floor((bounds.right + 5) / GRID); cx += 1) {
+          for (let cy = Math.floor((bounds.top - 5) / GRID); cy <= Math.floor((bounds.bottom + 5) / GRID); cy += 1) {
+            keys.push(`${cx}|${cy}`);
+          }
+        }
+        return keys;
+      };
+
       const scoreLabelPosition = (candidateBounds, nodeId) => {
         let score = 0;
         placedLabelBounds.forEach(bounds => {
           if (intersects(candidateBounds, bounds, 5)) score += 3000;
         });
-        nodeObstacles.forEach(bounds => {
-          if (bounds.id === nodeId) return;
-          if (intersects(candidateBounds, bounds, 5)) score += 1000;
-        });
         distanceObstacles.forEach(bounds => {
           if (intersects(candidateBounds, bounds, 4)) score += 4000;
         });
-        pipeSampleGroups.forEach(samples => {
-          for (const point of samples) {
+        const keys = cellsAround(candidateBounds);
+        const seenNodes = new Set();
+        const seenPipes = new Set();
+        keys.forEach(key => {
+          (nodeGrid.get(key) || []).forEach(bounds => {
+            if (bounds.id === nodeId || seenNodes.has(bounds.id)) return;
+            if (!intersects(candidateBounds, bounds, 5)) return;
+            seenNodes.add(bounds.id);
+            score += 1000;
+          });
+          (pipeGrid.get(key) || []).forEach(({ point, groupIndex }) => {
+            if (seenPipes.has(groupIndex)) return;
             if (
-              point.x >= candidateBounds.left - 5 && point.x <= candidateBounds.right + 5
-              && point.y >= candidateBounds.top - 5 && point.y <= candidateBounds.bottom + 5
-            ) {
-              score += 10000;
-              return;
-            }
-          }
+              point.x < candidateBounds.left - 5 || point.x > candidateBounds.right + 5
+              || point.y < candidateBounds.top - 5 || point.y > candidateBounds.bottom + 5
+            ) return;
+            seenPipes.add(groupIndex);
+            score += 10000;
+          });
         });
         return score;
       };
 
       nodeDefs.forEach(n => {
-        if (n.showLabel === false) return;
-        if (!n.identifierRequired && !n.displayName) return;
-        let x = n.x, y = n.y;
+        // Con «ID Accesorios» activo cada pieza dice de qué se trata.
+        const forcedByFilter = showAccessoryIds && !n.hidden && n.elementType !== 'junction';
+        if (!forcedByFilter) {
+          if (n.showLabel === false) return;
+          if (!n.identifierRequired && !n.displayName) return;
+        }
+        const anchorPoint = nodePointOf(n);
+        let x = anchorPoint.x, y = anchorPoint.y;
         const cls = n.elementType;
         const labelValue = n.displayName || n.id;
         if (n.elementType === 'chamber') {
@@ -3975,9 +4450,15 @@
             candidates.push([dx / length * 24, dy / length * 16]);
           }
           const radius = Math.max(10, Number(n.radius) || 0);
-          [radius + 14, radius + 26, radius + 40].forEach(distance => {
-            for (let step = 0; step < 12; step += 1) {
-              const angle = (step / 12) * Math.PI * 2;
+          // Con el filtro de accesorios hay más de cien rótulos disputándose el
+          // sitio: se buscan más posiciones antes de darse por vencido.
+          const rings = showAccessoryIds
+            ? [radius + 11, radius + 19, radius + 28, radius + 38, radius + 50]
+            : [radius + 14, radius + 26, radius + 40];
+          const steps = showAccessoryIds ? 16 : 12;
+          rings.forEach(distance => {
+            for (let step = 0; step < steps; step += 1) {
+              const angle = (step / steps) * Math.PI * 2;
               // Más holgura horizontal: el rótulo es más ancho que alto.
               candidates.push([Math.cos(angle) * distance * 1.45, Math.sin(angle) * distance]);
             }
@@ -3996,7 +4477,7 @@
           y += best[1];
         }
         const text = E('text', {
-          class:`node-label ${cls}`,
+          class:`node-label ${cls}${forcedByFilter ? ' accessory-id' : ''}`,
           x,
           y,
           'data-node-id': n.id,
@@ -4054,11 +4535,14 @@
       status.textContent = allNodesActive && allSegmentsActive ? '¡Red completada!' : '';
     }
 
+    computeAappSpread();
     buildNodes();
-    updateAccessoryZoom();
     lineDefs.forEach(buildLine);
+    layoutFlatDistanceLabels();
+    buildRunEndMarkers();
     layoutBranchDistanceLabels();
     placeLabels();
+    updateAccessoryZoom();
 
     const savedFilterSettings = loadFilterSettings();
     labelsFilterCheckbox.checked = savedFilterSettings.showPointNames !== false;
@@ -5191,7 +5675,7 @@ renderComments();
 </script>
 
   <script src="./costanera-acacias-aall.js?v=4"></script>
-<script src="./costanera-acacias-aapp.js?v=3"></script>
+<script src="./costanera-acacias-aapp.js?v=7"></script>
 <script src="./version-manager.js?v=8"></script>
 <script src="./firebase-config.js"></script>
 <script type="module" src="./firebase-sync.js"></script>
