@@ -337,7 +337,9 @@ def build_runs(lines, extra_merges=()):
                         if by_id[other_id]["diameter"] == "200":
                             continue
                         angle = deviation(line_id, other_id, node_id)
-                        aligned = passthrough or angle <= MAX_MERGE_DEVIATION_DEGREES
+                        # Un codo de 90° no continúa el trazo aunque el nodo sea
+                        # de paso: tratarlo como tal se tragaba ramales enteros.
+                        aligned = angle <= MAX_MERGE_DEVIATION_DEGREES
                         # Un resto diminuto se integra aunque medie un codo: el
                         # accesorio no obliga por sí solo a partir la cota.
                         tiny = total < SHORT_RUN_METERS
@@ -905,7 +907,7 @@ def generate(source_pdf: Path, output_path: Path):
     project = {
         "id": "builtin-costanera-acacias-aapp",
         "key": "costanera-acacias-aapp",
-        "revision": 9,
+        "revision": 10,
         "name": "Costanera_Acacias_AAPP",
         "networkType": "AAPP",
         "source": "builtin",

@@ -147,7 +147,7 @@
     .node-label.sump, .node-label.discharge { font-size: 11px; font-weight: 600; fill: #1f2937; stroke-width: 4px; }
     .node-label.discharge { fill: #1d4ed8; }
     /* Los nombres de accesorio son largos y van muchos juntos: letra menor. */
-    .node-label.accessory-id { font-size: 8px; font-weight: 700; fill: #1f2937; stroke-width: 3.5px; }
+    .node-label.accessory-id { font-size: 6.4px; font-weight: 700; fill: #1f2937; stroke-width: 2.8px; }
     .distance-group { cursor: pointer; }
     .distance-hit { fill: transparent; pointer-events: all; }
     .distance-text { font-weight: 700; fill: #6b7280; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: #fafafa; stroke-width: 3.5px; stroke-linejoin: round; opacity: .85; }
@@ -155,10 +155,10 @@
     .distance-text.branch { font-size: 9px; opacity: .62; }
     /* En AAPP la cota se lee en obra: horizontal, opaca y con el tramo nombrado. */
     .distance-plate { fill: #fff; stroke: #cbd5e1; stroke-width: .8; }
-    .distance-group.flat .distance-text { fill: #111827; opacity: 1; stroke: none; font-size: 8.6px; }
+    .distance-leader { stroke: #64748b; stroke-width: .9; fill: none; pointer-events: none; }
+    html[data-theme="night"] .distance-leader { stroke: #94a3b8; }
+    .distance-group.flat .distance-text { fill: #111827; opacity: 1; stroke: none; font-size: 6.9px; }
     .distance-group.flat .distance-text .run-name { fill: #b91c1c; }
-    .run-end { fill: none; stroke: #15803d; stroke-width: 3.4; stroke-linecap: round; opacity: 0; transition: opacity .12s ease; pointer-events: none; }
-    .run-end.visible { opacity: 1; }
     html[data-theme="night"] .distance-plate { fill: #0b1220; stroke: #475569; }
     html[data-theme="night"] .distance-group.flat .distance-text { fill: #f8fafc; }
     html[data-theme="night"] .distance-group.flat .distance-text .run-name { fill: #fb7185; }
@@ -1841,7 +1841,7 @@
       const runName = run && !/^AP-GEO/.test(run.identifier || '') ? run.identifier : '';
       const measureValue = `${formatLength(labelMeters)} m`;
       const textValue = flat && runName ? `${runName} · ${measureValue}` : measureValue;
-      const width = Math.max(30, textValue.length * (flat ? 5.0 : 7.8));
+      const width = Math.max(24, textValue.length * (flat ? 4.0 : 7.8));
       let p = measure.getPointAtLength(m);
       let before = measure.getPointAtLength(Math.max(0, m - 2));
       let after = measure.getPointAtLength(Math.min(total, m + 2));
@@ -1892,7 +1892,7 @@
         role: 'button',
         'aria-label': `Longitud total de ${getLineDisplayName(def)}: ${textValue}`
       });
-      const height = flat ? 15 : 20;
+      const height = flat ? 12 : 20;
       if (flat) {
         // Placa opaca: sobre la imagen satelital un texto con halo no basta.
         group.appendChild(E('rect', {
@@ -2583,12 +2583,6 @@
         const base = state.distanceGroupBaseTransform || '';
         state.distanceGroup.setAttribute('transform',
           level ? `translate(${shiftX.toFixed(2)} ${shiftY.toFixed(2)}) ${base}`.trim() : base);
-      });
-      segmentGuidesGroup.querySelectorAll('.run-end').forEach(marker => {
-        const offset = aappSpread.get(marker.getAttribute('data-node-id'));
-        if (!offset || !level) marker.removeAttribute('transform');
-        else marker.setAttribute('transform',
-          `translate(${(offset.dx * level).toFixed(2)} ${(offset.dy * level).toFixed(2)})`);
       });
     }
 
@@ -3501,7 +3495,6 @@
       saveActivities();
       updateProgressPanel();
       checkVictory();
-      updateRunEndMarkers();
     }
 
     // Convención uniforme para todas las cotas: misma inclinación que su
@@ -3518,6 +3511,48 @@
         .map(node => ({
           left: node.x - 12, right: node.x + 12, top: node.y - 12, bottom: node.y + 12
         }));
+
+      // Ninguna cota puede quedar sobre una tubería. Se muestrean todas y se
+      // consulta por celdas; el recuadro girado se comprueba en sus propios ejes.
+      const PIPE_GRID = 40;
+      const pipeGrid = new Map();
+      lineStates.forEach(state => {
+        const path = state.measurePath;
+        const total = path.getTotalLength();
+        const step = Math.max(2, total / 140);
+        for (let length = 0; length <= total; length += step) {
+          const point = path.getPointAtLength(length);
+          const key = `${Math.floor(point.x / PIPE_GRID)}|${Math.floor(point.y / PIPE_GRID)}`;
+          const bucket = pipeGrid.get(key);
+          if (bucket) bucket.push(point);
+          else pipeGrid.set(key, [point]);
+        }
+      });
+
+      const coversPipe = (box, dx, dy) => {
+        const radians = box.deg * Math.PI / 180;
+        const cos = Math.cos(radians);
+        const sin = Math.sin(radians);
+        const cx = box.x + dx;
+        const cy = box.y + dy;
+        // Media placa, más el semiancho del tubo para que ni se rocen.
+        const halfWidth = box.width / 2 + 3;
+        const halfHeight = box.height / 2 + 3;
+        const reach = Math.hypot(halfWidth, halfHeight);
+        for (let gx = Math.floor((cx - reach) / PIPE_GRID); gx <= Math.floor((cx + reach) / PIPE_GRID); gx += 1) {
+          for (let gy = Math.floor((cy - reach) / PIPE_GRID); gy <= Math.floor((cy + reach) / PIPE_GRID); gy += 1) {
+            const bucket = pipeGrid.get(`${gx}|${gy}`);
+            if (!bucket) continue;
+            for (const point of bucket) {
+              const ox = point.x - cx;
+              const oy = point.y - cy;
+              if (Math.abs(ox * cos + oy * sin) <= halfWidth
+                && Math.abs(-ox * sin + oy * cos) <= halfHeight) return true;
+            }
+          }
+        }
+        return false;
+      };
 
       // Recuadro real de la placa ya girada, en coordenadas del dibujo.
       const rotatedBounds = (box, dx, dy) => {
@@ -3563,10 +3598,13 @@
         // El corrimiento no puede sacar la cota de su tramo: se limita a una
         // fracción de lo que mide, para que siga leyéndose en su punto medio.
         const runLength = (getRunFor(state.definition)?.meters || 0) * DRAWING_UNITS_PER_METER;
-        const maxAlong = Math.min(58, runLength * .3);
+        // En un tramo largo la cota debe quedarse cerca de su medio. En uno
+        // corto la placa mide más que el propio tramo: centrarla es imposible y
+        // lo que importa es que se lea y no estorbe.
+        const maxAlong = Math.max(40, Math.min(70, runLength * .3));
         const candidates = [];
-        [0, -2 * DIMENSION_OFFSET, 12, 24].forEach(away => {
-          [0, 20, -20, 38, -38, 58, -58].forEach(along => {
+        [0, 12, 24, 38, 54, -2 * DIMENSION_OFFSET, -42, -56, -72].forEach(away => {
+          [0, 20, -20, 38, -38, 58, -58, 78, -78].forEach(along => {
             if (Math.abs(along) > maxAlong) return;
             candidates.push({
               dx: awayX * away + alongX * along,
@@ -3582,6 +3620,8 @@
         for (const candidate of candidates) {
           const moved = rotatedBounds(box, candidate.dx, candidate.dy);
           let score = candidate.cost;
+          // Tapar una tubería es lo peor que puede pasar: pesa más que nada.
+          if (coversPipe(box, candidate.dx, candidate.dy)) score += 4000;
           placed.forEach(other => { if (intersects(moved, other, 2)) score += 1000; });
           accessoryBoxes.forEach(other => { if (intersects(moved, other)) score += 250; });
           if (score >= bestScore) continue;
@@ -3591,6 +3631,36 @@
         }
 
         placed.push(rotatedBounds(box, best[0], best[1]));
+
+        // Si la cota tuvo que apartarse, una línea fina la ata a su tramo.
+        group.querySelector('.distance-leader')?.remove();
+        const shift = Math.hypot(box.x + best[0] - box.anchorX, box.y + best[1] - box.anchorY);
+        if (shift > DIMENSION_OFFSET * 1.8) {
+          // El punto medio del tramo, visto desde los ejes propios de la placa.
+          const radians = -box.deg * Math.PI / 180;
+          const cos = Math.cos(radians);
+          const sin = Math.sin(radians);
+          const px = box.anchorX - best[0] - box.x;
+          const py = box.anchorY - best[1] - box.y;
+          const targetX = box.x + px * cos - py * sin;
+          const targetY = box.y + px * sin + py * cos;
+          const dirX = targetX - box.x;
+          const dirY = targetY - box.y;
+          const span = Math.hypot(dirX, dirY) || 1;
+          // Arranca justo en el borde de la placa, no dentro ni en el aire.
+          const toEdge = Math.min(
+            Math.abs(dirX) > .001 ? (box.width / 2) / Math.abs(dirX / span) : Infinity,
+            Math.abs(dirY) > .001 ? (box.height / 2) / Math.abs(dirY / span) : Infinity,
+            span
+          );
+          group.insertBefore(E('line', {
+            class: 'distance-leader',
+            x1: (box.x + dirX / span * toEdge).toFixed(2),
+            y1: (box.y + dirY / span * toEdge).toFixed(2),
+            x2: targetX.toFixed(2), y2: targetY.toFixed(2)
+          }), group.firstChild);
+        }
+
         const own = group.dataset.ownTransform || '';
         const transform = best[0] || best[1]
           ? `translate(${best[0].toFixed(2)} ${best[1].toFixed(2)}) ${own}`.trim()
@@ -3598,55 +3668,6 @@
         state.distanceGroupBaseTransform = transform;
         if (transform) group.setAttribute('transform', transform);
         else group.removeAttribute('transform');
-      });
-    }
-
-    // Marca de inicio y fin del tramo: al marcarlo hay que ver dónde empieza y
-    // dónde termina, que es lo que se replantea en obra.
-    function buildRunEndMarkers() {
-      if (NETWORK_TYPE !== 'AAPP' || !runDefs.length) return;
-      runDefs.forEach(run => {
-        const appearances = new Map();
-        run.lines.forEach(lineId => {
-          const definition = lineDefs.find(line => line.id === lineId);
-          if (!definition) return;
-          [definition.from, definition.to].forEach(nodeId =>
-            appearances.set(nodeId, (appearances.get(nodeId) || 0) + 1));
-        });
-        const terminals = [...appearances.entries()].filter(([, count]) => count === 1).map(([id]) => id);
-        terminals.forEach(nodeId => {
-          const definition = lineDefs.find(line =>
-            run.lines.includes(line.id) && (line.from === nodeId || line.to === nodeId));
-          if (!definition) return;
-          const ends = aappEndsOf(definition);
-          const near = definition.from === nodeId ? ends.from : ends.to;
-          const far = definition.from === nodeId ? ends.to : ends.from;
-          const dx = far.x - near.x;
-          const dy = far.y - near.y;
-          const length = Math.hypot(dx, dy) || 1;
-          const nx = -dy / length * 9;
-          const ny = dx / length * 9;
-          segmentGuidesGroup.appendChild(E('path', {
-            class: 'run-end',
-            'data-run-id': run.id,
-            'data-node-id': nodeId,
-            d: `M ${(near.x - nx).toFixed(2)} ${(near.y - ny).toFixed(2)} `
-              + `L ${(near.x + nx).toFixed(2)} ${(near.y + ny).toFixed(2)}`
-          }));
-        });
-      });
-    }
-
-    function updateRunEndMarkers() {
-      if (NETWORK_TYPE !== 'AAPP' || !runDefs.length) return;
-      const activeRuns = new Set();
-      lineStates.forEach(state => {
-        if (!state.segmentOverlays.some((_, index) => isSegmentActive(state, index))) return;
-        const runId = runOfLine.get(state.definition.id);
-        if (runId) activeRuns.add(runId);
-      });
-      segmentGuidesGroup.querySelectorAll('.run-end').forEach(marker => {
-        marker.classList.toggle('visible', activeRuns.has(marker.getAttribute('data-run-id')));
       });
     }
 
@@ -4326,7 +4347,7 @@
       );
       const showAccessoryIds = NETWORK_TYPE === 'AAPP' && accessoryIdCheckbox?.checked === true;
       const boundsAt = (x, y, textValue, elementType) => {
-        const fontSize = elementType === 'chamber' ? 16 : (showAccessoryIds ? 8 : 11);
+        const fontSize = elementType === 'chamber' ? 16 : (showAccessoryIds ? 6.4 : 11);
         const width = Math.max(fontSize * 1.6, textValue.length * fontSize * 0.62);
         const height = fontSize * 1.25;
         return {
@@ -4597,7 +4618,6 @@
     buildNodes();
     lineDefs.forEach(buildLine);
     layoutFlatDistanceLabels();
-    buildRunEndMarkers();
     layoutBranchDistanceLabels();
     placeLabels();
     updateAccessoryZoom();
@@ -5733,7 +5753,7 @@ renderComments();
 </script>
 
   <script src="./costanera-acacias-aall.js?v=4"></script>
-<script src="./costanera-acacias-aapp.js?v=9"></script>
+<script src="./costanera-acacias-aapp.js?v=10"></script>
 <script src="./version-manager.js?v=8"></script>
 <script src="./firebase-config.js"></script>
 <script type="module" src="./firebase-sync.js"></script>
