@@ -48,6 +48,110 @@ def apply_affine(point, transform):
     return np.append(np.asarray(point, dtype=float), 1.0) @ transform
 
 
+WGS84_A = 6378137.0
+WGS84_F = 1 / 298.257223563
+WGS84_E2 = WGS84_F * (2 - WGS84_F)
+UTM_K0 = 0.9996
+UTM_ZONE = 17
+SATELLITE_ZOOM = 19
+
+
+def utm_to_latlon(east, north):
+    """Transversa de Mercator inversa (serie de Krüger), zona 17 sur."""
+    x = east - 500000.0
+    y = north - 10000000.0
+    e1 = (1 - math.sqrt(1 - WGS84_E2)) / (1 + math.sqrt(1 - WGS84_E2))
+    mu = (y / UTM_K0) / (
+        WGS84_A * (1 - WGS84_E2 / 4 - 3 * WGS84_E2**2 / 64 - 5 * WGS84_E2**3 / 256)
+    )
+    phi1 = (mu
+            + (3 * e1 / 2 - 27 * e1**3 / 32) * math.sin(2 * mu)
+            + (21 * e1**2 / 16 - 55 * e1**4 / 32) * math.sin(4 * mu)
+            + (151 * e1**3 / 96) * math.sin(6 * mu)
+            + (1097 * e1**4 / 512) * math.sin(8 * mu))
+    ep2 = WGS84_E2 / (1 - WGS84_E2)
+    c1 = ep2 * math.cos(phi1) ** 2
+    t1 = math.tan(phi1) ** 2
+    n1 = WGS84_A / math.sqrt(1 - WGS84_E2 * math.sin(phi1) ** 2)
+    r1 = WGS84_A * (1 - WGS84_E2) / (1 - WGS84_E2 * math.sin(phi1) ** 2) ** 1.5
+    d = x / (n1 * UTM_K0)
+    lat = phi1 - (n1 * math.tan(phi1) / r1) * (
+        d**2 / 2
+        - (5 + 3 * t1 + 10 * c1 - 4 * c1**2 - 9 * ep2) * d**4 / 24
+        + (61 + 90 * t1 + 298 * c1 + 45 * t1**2 - 252 * ep2 - 3 * c1**2) * d**6 / 720
+    )
+    lon = math.radians(UTM_ZONE * 6 - 183) + (
+        d
+        - (1 + 2 * t1 + c1) * d**3 / 6
+        + (5 - 2 * c1 + 28 * t1 - 3 * c1**2 + 8 * ep2 + 24 * t1**2) * d**5 / 120
+    ) / math.cos(phi1)
+    return math.degrees(lat), math.degrees(lon)
+
+
+def latlon_to_tile_pixel(lat, lon, zoom=SATELLITE_ZOOM):
+    """Web Mercator en píxeles, con mosaicos de 256."""
+    world = 256 * 2**zoom
+    sine = math.sin(math.radians(lat))
+    return (
+        (lon + 180.0) / 360.0 * world,
+        (0.5 - math.log((1 + sine) / (1 - sine)) / (4 * math.pi)) * world,
+    )
+
+
+def build_georeference(origin_east, origin_north, rms, source_name):
+    return {
+        "crs": "EPSG:32717",
+        "orientation": "north-up",
+        "handednessValidated": True,
+        "controlSource": source_name,
+        "controlPointCount": len(CONTROLS),
+        "controlRmsMeters": round(rms, 6),
+        "displayOrigin": {
+            "east": round(origin_east, 4),
+            "north": round(origin_north, 4),
+            "unitsPerMeter": UNITS_PER_METER,
+        },
+    }
+
+
+def build_satellite_layer(origin_east, origin_north):
+    """Afín de píxeles de mosaico a unidades de dibujo, sobre una malla del área."""
+    east_span = (max(v[0] for v in CONTROLS.values()) + DISPLAY_MARGIN_METERS) - origin_east
+    north_span = origin_north - (min(v[1] for v in CONTROLS.values()) - DISPLAY_MARGIN_METERS)
+    steps = 6
+    pixels, display = [], []
+    for i in range(steps + 1):
+        for j in range(steps + 1):
+            east = origin_east + east_span * i / steps
+            north = origin_north - north_span * j / steps
+            pixels.append(latlon_to_tile_pixel(*utm_to_latlon(east, north)))
+            display.append((
+                (east - origin_east) * UNITS_PER_METER,
+                (origin_north - north) * UNITS_PER_METER,
+            ))
+    tile_origin_x = math.floor(min(p[0] for p in pixels) / 256)
+    tile_origin_y = math.floor(min(p[1] for p in pixels) / 256)
+    local = np.asarray([
+        (px - tile_origin_x * 256, py - tile_origin_y * 256) for px, py in pixels
+    ])
+    transform, rms = affine_fit(local, np.asarray(display))
+    matrix = {
+        "a": round(float(transform[0][0]), 10), "b": round(float(transform[0][1]), 10),
+        "c": round(float(transform[1][0]), 10), "d": round(float(transform[1][1]), 10),
+        "e": round(float(transform[2][0]), 10), "f": round(float(transform[2][1]), 10),
+    }
+    # Los mosaicos y el SVG comparten ejes; un determinante negativo reflejaría el mapa.
+    if matrix["a"] * matrix["d"] - matrix["b"] * matrix["c"] <= 0:
+        raise ValueError("La transformación satelital reflejaría el mapa")
+    return {
+        "zoom": SATELLITE_ZOOM,
+        "tileOriginX": tile_origin_x,
+        "tileOriginY": tile_origin_y,
+        "transform": matrix,
+        "rmsDisplayUnits": round(rms, 6),
+    }
+
+
 def centerline(pair):
     points = np.asarray([point for item in pair for point in item["pts"]], dtype=float)
     center = points.mean(axis=0)
@@ -193,10 +297,11 @@ def build_definition():
             "direction": "source-to-network",
         },
         "visualizationRules": {
-            "tubeModuleMeters": 6,
+            # La tubería AAPP llega en rollo continuo: no se divide en módulos.
+            "pipeSupply": "coil",
             "oneTotalLengthLabelPerLine": True,
             "labelEveryTubeModule": False,
-            "tubeDivisionGuidesVisibleOnZoom": True,
+            "tubeDivisionGuidesVisibleOnZoom": False,
             "progressLabels": {"collector": "Tubería 110 mm", "branch": "Tubería 90 mm"},
         },
         "elementRules": {
@@ -451,11 +556,32 @@ def generate(source_pdf: Path, output_path: Path):
 
     display_boundary = [to_display(point) for point in boundary]
     display_pond = [to_display(point) for point in pond]
+
+    def as_points(values):
+        return [{"x": round(float(p[0]), 2), "y": round(float(p[1]), 2)} for p in values]
+
+    # Misma forma que el modelo AALL: el visor dibuja lindero, estanque y capa
+    # satelital sin necesitar una rama propia para AAPP.
+    georeference = build_georeference(origin_east, origin_north, rms, source_pdf.name)
     site_geometry = {
+        "crs": "EPSG:32717",
         "source": "project-pdf-georeferenced",
+        "sourceFile": source_pdf.name,
         "controlRmsMeters": round(rms, 6),
-        "boundary": [{"x": round(float(p[0]), 2), "y": round(float(p[1]), 2)} for p in display_boundary],
-        "pond": [{"x": round(float(p[0]), 2), "y": round(float(p[1]), 2)} for p in display_pond],
+        "boundary": {"name": "Lindero Costanera Acacias", "points": as_points(display_boundary)},
+        "areas": [{"name": "Estanque", "points": as_points(display_pond)}],
+        "controlPoints": [
+            {
+                "id": label,
+                "x": round((CONTROLS[label][0] - origin_east) * UNITS_PER_METER, 2),
+                "y": round((origin_north - CONTROLS[label][1]) * UNITS_PER_METER, 2),
+                "east": CONTROLS[label][0],
+                "north": CONTROLS[label][1],
+                "feature": "boundary" if label in ("P1", "P2", "P3", "P4") else "pond",
+            }
+            for label in sorted(CONTROLS)
+        ],
+        "satellite": build_satellite_layer(origin_east, origin_north),
     }
     extent_points = [*display_boundary, *display_pond, *[np.array((node["x"], node["y"])) for node in nodes]]
     minimum = np.min(extent_points, axis=0)
@@ -475,7 +601,7 @@ def generate(source_pdf: Path, output_path: Path):
     project = {
         "id": "builtin-costanera-acacias-aapp",
         "key": "costanera-acacias-aapp",
-        "revision": 2,
+        "revision": 3,
         "name": "Costanera_Acacias_AAPP",
         "networkType": "AAPP",
         "source": "builtin",
@@ -495,7 +621,7 @@ def generate(source_pdf: Path, output_path: Path):
             "schemaVersion": 2,
             "network": {
                 "type": "AAPP", "definition": definition, "nodes": nodes, "lines": lines,
-                "viewBox": view_box,
+                "viewBox": view_box, "georeference": georeference,
                 "routeEdges": [], "siteGeometry": site_geometry,
             },
             "state": {

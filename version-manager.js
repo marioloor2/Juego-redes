@@ -248,7 +248,9 @@
     const created = [];
     for (const project of getBuiltInProjects()) {
       const snapshot = clone(project.snapshot);
-      if (!snapshot.network.definition) {
+      // NETWORK_DEFINITION pertenece al modelo abierto: sembrarla en un modelo de
+      // otro tipo dejaría sus reglas equivocadas grabadas en la biblioteca.
+      if (!snapshot.network.definition && NETWORK_DEFINITION?.type === snapshot.network?.type) {
         snapshot.network.definition = clone(NETWORK_DEFINITION);
       }
       const revision = Number(project.revision) || 1;

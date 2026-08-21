@@ -103,8 +103,9 @@
     .base-line, .segment-overlay, .full-overlay, .hit { fill: none; stroke-linecap: round; stroke-linejoin: round; }
     .base-line { stroke: #111; stroke-width: 5.2; pointer-events: none; }
     .base-line.branch { stroke-width: 3.4; }
-    .base-line.aapp-110 { stroke: #2563eb; stroke-width: 4.6; }
-    .base-line.aapp-90, .base-line.aapp-200 { stroke: #dc2626; stroke-width: 3.5; }
+    /* AAPP usa el mismo negro que AALL; el diámetro se distingue por el grosor. */
+    .base-line.aapp-110 { stroke-width: 4.6; }
+    .base-line.aapp-90, .base-line.aapp-200 { stroke-width: 3.5; }
     .segment-overlay { stroke: #16a34a; stroke-width: 6; stroke-linecap: butt; pointer-events: none; opacity: 0; transition: opacity .12s ease; }
     .segment-overlay.branch { stroke-width: 4.2; }
     .segment-overlay.active { opacity: 1; }
@@ -117,9 +118,13 @@
     .node.camera { stroke: #111; stroke-width: 0; }
     .node.sump { stroke-width: 1.8; }
     .node.discharge { fill: none; stroke: none; }
-    .node.aapp-accessory { fill: #fff; stroke: #d4a900; stroke-width: 2.1; color: #b89000; }
+    .node.aapp-accessory { fill: #fff; stroke: #dc2626; stroke-width: 2.1; color: #dc2626; }
     .node.aapp-accessory .accessory-hit { fill: transparent; stroke: transparent; pointer-events: all; }
     .node.aapp-accessory .accessory-glyph { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+    /* El cuerpo va más grueso que la tubería (4.6) o la pieza se pierde dentro. */
+    .node.aapp-accessory .accessory-body { stroke-width: 6.4; }
+    .node.aapp-accessory .accessory-body.branch { stroke-width: 4.8; }
+    .node.aapp-accessory .accessory-flange { stroke-width: 2.9; stroke-linecap: butt; }
     .node.aapp-accessory .accessory-fill { fill: currentColor; stroke: currentColor; stroke-width: 1.4; pointer-events: none; }
     .node.aapp-accessory .accessory-text { fill: currentColor; stroke: none; font-size: 6px; font-weight: 800; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
     .node.aapp-accessory.active { color: #15803d; stroke: #16a34a; }
@@ -240,6 +245,9 @@
     .model-activity-ui .activities td { padding: 6px 3px; font-size: 10px; }
     .model-activity-ui .activities th { font-size: 9px; }
     .model-activity-ui .date-input { padding: 5px 2px; font-size: 9px; }
+    .model-activity-ui .date-editor { grid-template-columns: minmax(0, 1fr) 22px; gap: 2px; }
+    .model-activity-ui .date-picker-control { width: 22px; min-height: 25px; border-radius: 6px; }
+    .model-activity-ui .date-picker-control svg { width: 12px; height: 12px; }
     .model-activity-ui .delete-btn { width: 23px; height: 23px; font-size: 15px; }
     .model-filter-panel { margin: 0; width: 100%; box-shadow: 0 5px 16px rgba(0,0,0,.12); }
     .model-filter-stack { display: grid; gap: 8px; }
@@ -316,6 +324,16 @@
     .activities tbody tr:last-child td { border-bottom: 0; }
     .activity-select { width: 18px; height: 18px; margin: 0; accent-color: #2563eb; cursor: pointer; }
     .date-input { width: 100%; min-width: 0; padding: 6px 4px; border: 1px solid #bfc5ce; border-radius: 7px; font-size: 12px; background: #fff; text-align: center; font-variant-numeric: tabular-nums; }
+    .date-editor { display: grid; grid-template-columns: minmax(0, 1fr) 38px; gap: 6px; align-items: stretch; width: 100%; }
+    .date-picker-control {
+      position: relative; display: grid; width: 38px; min-height: 40px; place-items: center;
+      overflow: hidden; border: 1px solid #bfc5ce; border-radius: 9px; background: #fff; color: #111827;
+    }
+    .date-picker-control svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; pointer-events: none; }
+    .native-date-picker {
+      position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0;
+      border: 0; opacity: 0; cursor: pointer;
+    }
     .activity-dir { overflow-wrap: anywhere; font-weight: 700; }
     .delete-btn { width: 28px; height: 28px; padding: 0; border-radius: 50%; background: #fee2e2; color: #dc2626; font-size: 18px; font-weight: 800; line-height: 1; }
     .backdrop { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(0,0,0,.45); }
@@ -362,10 +380,10 @@
       box-shadow: 0 3px 14px rgba(0,0,0,.36);
     }
     html[data-theme="night"] .base-line { stroke: #f8fafc; }
-    html[data-theme="night"] .base-line.aapp-110 { stroke: #60a5fa; }
-    html[data-theme="night"] .base-line.aapp-90,
-    html[data-theme="night"] .base-line.aapp-200 { stroke: #fb7185; }
     html[data-theme="night"] .node { fill: #f8fafc; stroke: #0f172a; }
+    /* Sobre fondo oscuro el rojo pleno se apaga; se aclara sin cambiar de color. */
+    html[data-theme="night"] .node.aapp-accessory { stroke: #fb7185; color: #fb7185; }
+    html[data-theme="night"] .node.aapp-accessory.active { stroke: #22c55e; color: #22c55e; }
     html[data-theme="night"] .node.active { fill: #22c55e; }
     html[data-theme="night"] .camera-ring { stroke: #fb7185; }
     html[data-theme="night"] .headwall-shape { stroke: #f8fafc; }
@@ -431,6 +449,9 @@
       border-color: #475569;
       background: #0b1220;
       color: #f8fafc;
+    }
+    html[data-theme="night"] .date-picker-control {
+      border-color: #475569; background: #0b1220; color: #f8fafc;
     }
     html[data-theme="night"] .attr-table th,
     html[data-theme="night"] .attr-table td {
@@ -1020,8 +1041,15 @@
         })
       })
     });
+    // Una definición de otro tipo de red deja el modelo entero con reglas ajenas
+    // (módulos de tubo, elementos, rótulos). Si no corresponde, se descarta.
+    const bootstrapDefinition = versionBootstrap?.network?.definition;
+    const usableBootstrapDefinition = bootstrapDefinition
+      && (!bootstrapDefinition.type || String(bootstrapDefinition.type).toUpperCase() === NETWORK_TYPE)
+      ? bootstrapDefinition
+      : null;
     const NETWORK_DEFINITION = Object.freeze(
-      versionBootstrap?.network?.definition || AALL_NETWORK_DEFINITION
+      usableBootstrapDefinition || AALL_NETWORK_DEFINITION
     );
 
     // Clasificación confirmada para el modelo de prueba actual. Los nombres no
@@ -1146,6 +1174,9 @@
       transformStoredComments(point => transformCostaneraCadPoint(restoreCostaneraRawPoint(point)));
     }
 
+    // Otros modelos (AAPP) traen su propia georreferenciación ya resuelta. Se
+    // publica tal cual: la corrección de orientación de arriba es exclusiva del
+    // CAD de AALL y no debe alcanzarlos.
     const activeNetworkGeoreference = isCostaneraGeoreferencedModel
       ? Object.freeze(loadedGeoreference || {
           crs: 'EPSG:32717',
@@ -1155,7 +1186,7 @@
           handednessValidated: true,
           controlSource: 'shared-cad-pdf-network-and-boundary'
         })
-      : null;
+      : (loadedGeoreference?.displayOrigin ? Object.freeze(loadedGeoreference) : null);
     globalThis.RED_NETWORK_GEOREFERENCE = activeNetworkGeoreference;
     globalThis.RED_NETWORK_SITE_GEOMETRY = versionBootstrap?.network?.siteGeometry || null;
 
@@ -1655,10 +1686,23 @@
       return el;
     }
 
+    // AALL se arma con tubos rígidos de 6 m, por eso la línea se divide en módulos.
+    // AAPP llega en rollo continuo y no tiene divisiones. Los modelos AAPP
+    // heredaron el módulo de AALL en su definición, así que el principio de
+    // operación manda sobre el valor declarado.
+    function tubeModuleMeters() {
+      const rules = NETWORK_DEFINITION.visualizationRules || {};
+      if (rules.pipeSupply === 'coil') return null;
+      if (NETWORK_DEFINITION.operatingPrinciple === 'pressurized') return null;
+      const declared = Number(rules.tubeModuleMeters);
+      return declared > 0 ? declared : null;
+    }
+
     function lengths(totalMeters) {
       const total = Number(totalMeters);
       if (!Number.isFinite(total) || total <= 0) return [null];
-      const tubeModule = NETWORK_DEFINITION.visualizationRules.tubeModuleMeters;
+      const tubeModule = tubeModuleMeters();
+      if (!tubeModule) return [total];
       const full = Math.floor(total / tubeModule);
       const remainder = Number((total - full * tubeModule).toFixed(2));
       const result = Array(full).fill(tubeModule);
@@ -2240,10 +2284,34 @@
       updateShortSegmentSelectorScale();
     }
 
+    // Proporción de zoom a la que el accesorio alcanza su tamaño completo.
+    const ACCESSORY_FULL_DETAIL_RATIO = .38;
+    const ACCESSORY_MIN_SCALE = .52;
+    const ACCESSORY_MIN_OPACITY = .5;
+    const aappAccessoryAnchors = [];
+
     function applyViewBox() {
       svg.setAttribute('viewBox', `${currentViewBox.x} ${currentViewBox.y} ${currentViewBox.width} ${currentViewBox.height}`);
       applyBranchStretch();
       updateGuideVisibility();
+      updateAccessoryZoom();
+    }
+
+    // Los accesorios están a tamaño de plano: vistos de lejos se amontonan y
+    // tapan la red. Se encogen y se atenúan al alejarse, y toman su tamaño
+    // completo cuando el zoom ya les da espacio.
+    function updateAccessoryZoom() {
+      if (!aappAccessoryAnchors.length) return;
+      const ratio = currentViewBox.width / INITIAL_VIEW_BOX.width;
+      const level = Math.max(0, Math.min(1,
+        (1 - ratio) / (1 - ACCESSORY_FULL_DETAIL_RATIO)
+      ));
+      const scale = (ACCESSORY_MIN_SCALE + (1 - ACCESSORY_MIN_SCALE) * level).toFixed(3);
+      const opacity = (ACCESSORY_MIN_OPACITY + (1 - ACCESSORY_MIN_OPACITY) * level).toFixed(3);
+      aappAccessoryAnchors.forEach(anchor => {
+        anchor.element.setAttribute('transform', `translate(${anchor.x} ${anchor.y}) scale(${scale})`);
+        anchor.element.setAttribute('opacity', opacity);
+      });
     }
 
     function updateGuideVisibility() {
@@ -2586,6 +2654,41 @@
       });
     }
 
+    function addCalendarPicker(textInput) {
+      const editor = document.createElement('div');
+      editor.className = 'date-editor';
+      const currentParent = textInput.parentNode;
+      if (currentParent) currentParent.insertBefore(editor, textInput);
+      editor.appendChild(textInput);
+
+      const control = document.createElement('span');
+      control.className = 'date-picker-control';
+      control.title = 'Abrir calendario';
+      control.innerHTML = `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3.5" y="5.5" width="17" height="15" rx="2"></rect>
+          <path d="M7.5 3.5v4M16.5 3.5v4M3.5 9.5h17"></path>
+        </svg>
+      `;
+      const nativePicker = document.createElement('input');
+      nativePicker.type = 'date';
+      nativePicker.className = 'native-date-picker';
+      nativePicker.setAttribute('aria-label', 'Seleccionar fecha en el calendario');
+      nativePicker.value = parseDisplayDate(textInput.value) || '';
+      nativePicker.addEventListener('change', () => {
+        if (!nativePicker.value) return;
+        textInput.value = formatDateForDisplay(nativePicker.value);
+        textInput.setCustomValidity('');
+        textInput.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      textInput.addEventListener('change', () => {
+        nativePicker.value = parseDisplayDate(textInput.value) || '';
+      });
+      control.appendChild(nativePicker);
+      editor.appendChild(control);
+      return editor;
+    }
+
     function getNodeTypeLabel(node) {
       const fixed = ({ chamber: 'Cámara', sump: 'Sumidero', discharge: 'Descarga / cabezal' })[node?.elementType];
       return fixed || NETWORK_DEFINITION.elementRules?.[node?.elementType]?.canonicalName || 'Punto';
@@ -2784,7 +2887,10 @@
     }
 
     function applyPointNameFilter() {
-      labelsGroup.style.display = labelsFilterCheckbox.checked ? '' : 'none';
+      const visible = labelsFilterCheckbox.checked;
+      labelsGroup.style.display = visible ? '' : 'none';
+      // En AAPP el filtro se llama «Accesorios»: oculta las piezas, no solo su rótulo.
+      if (NETWORK_TYPE === 'AAPP') nodesGroup.style.display = visible ? '' : 'none';
     }
 
     function openNodeNameEditor(nodeId) {
@@ -3194,6 +3300,7 @@
         dateInput.className = 'date-input';
         dateInput.value = formatDateForDisplay(activity.date);
         enableDayFirstDateInput(dateInput);
+        const dateEditor = addCalendarPicker(dateInput);
         dateInput.addEventListener('change', () => {
           const displayedDate = dateInput.value.trim();
           if (!displayedDate) {
@@ -3213,7 +3320,7 @@
           activity.date = parsedDate;
           saveActivities();
         });
-        dateCell.appendChild(dateInput);
+        dateCell.appendChild(dateEditor);
         const actions = document.createElement('td');
         const del = document.createElement('button');
         del.type = 'button';
@@ -3478,18 +3585,171 @@
       return Math.atan2(direction.y, direction.x) * 180 / Math.PI - 90;
     }
 
+    // El cuerpo del accesorio debe ser más ancho que el tubo (4.6) para leerse
+    // como pieza y no perderse dentro de la línea. La brida va separada del
+    // cuerpo, igual que en el plano.
+    const AAPP_ARM_LENGTH = 9.4;
+    const AAPP_BODY_LENGTH = 7.1;
+    const AAPP_FLANGE_HALF = 4.7;
+    const AAPP_BRANCH_SCALE = .72;
+    // Válvulas, hidrantes y medidores: separación real de 8 unidades entre un
+    // hidrante y su válvula, así que el símbolo no puede pasar de 4 de radio.
+    const AAPP_DEVICE_SCALE = .55;
+    // Accesorios que son extremo de tubería: se arman siguiendo la dirección real
+    // de los tubos que llegan, para que el codo o la tee se lean como en el plano.
+    const AAPP_JOINT_TYPES = new Set([
+      'cap', 'elbow90', 'elbow135', 'semielbow', 'teeEqual', 'teeReducer', 'cross'
+    ]);
+    // Símbolos con texto: girarlos dejaría el rótulo tumbado.
+    const AAPP_UPRIGHT_TYPES = new Set(['hydrant', 'macroMeter', 'regulator']);
+
+    // La geometría del tramo manda sobre las coordenadas de los nodos: el plano
+    // trae extremos coincidentes que dejarían al accesorio sin dirección.
+    const aappLineGeometryCache = new Map();
+
+    function getAappLineGeometry(line) {
+      if (aappLineGeometryCache.has(line.id)) return aappLineGeometryCache.get(line.id);
+      const measure = E('path', { d: line.d, fill: 'none', stroke: 'none' });
+      svg.appendChild(measure);
+      const total = measure.getTotalLength();
+      let geometry = null;
+      if (total > .001) {
+        const step = Math.min(total, 2);
+        geometry = {
+          ends: [
+            { at: measure.getPointAtLength(0), toward: measure.getPointAtLength(step) },
+            { at: measure.getPointAtLength(total), toward: measure.getPointAtLength(total - step) }
+          ]
+        };
+      }
+      measure.remove();
+      aappLineGeometryCache.set(line.id, geometry);
+      return geometry;
+    }
+
+    function getAappJointDirections(node) {
+      const directions = [];
+      lineDefs.forEach(line => {
+        if (line.from !== node.id && line.to !== node.id) return;
+        const geometry = getAappLineGeometry(line);
+        if (!geometry) return;
+        const near = geometry.ends.reduce((closest, candidate) =>
+          Math.hypot(candidate.at.x - node.x, candidate.at.y - node.y)
+            < Math.hypot(closest.at.x - node.x, closest.at.y - node.y) ? candidate : closest);
+        const dx = near.toward.x - near.at.x;
+        const dy = near.toward.y - near.at.y;
+        const length = Math.hypot(dx, dy);
+        if (length < .001) return;
+        const direction = { x: dx / length, y: dy / length };
+        // Varias tuberías comparten extremo: un solo brazo por dirección.
+        if (directions.some(d => d.x * direction.x + d.y * direction.y > .996)) return;
+        directions.push(direction);
+      });
+      return directions;
+    }
+
+    function getAappNearestPipeDirection(node) {
+      let best = null;
+      let bestDistance = Infinity;
+      lineDefs.forEach(line => {
+        const geometry = getAappLineGeometry(line);
+        if (!geometry) return;
+        const [from, to] = geometry.ends.map(end => end.at);
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const lengthSquared = dx * dx + dy * dy;
+        if (lengthSquared < .000001) return;
+        const t = Math.max(0, Math.min(1,
+          ((node.x - from.x) * dx + (node.y - from.y) * dy) / lengthSquared));
+        const distance = Math.hypot(node.x - (from.x + dx * t), node.y - (from.y + dy * t));
+        if (distance >= bestDistance) return;
+        bestDistance = distance;
+        const length = Math.sqrt(lengthSquared);
+        best = { x: dx / length, y: dy / length };
+      });
+      return best;
+    }
+
+    // En una tee el ramal es el brazo que deja al par restante más enfrentado.
+    function getAappBranchIndex(directions) {
+      let branchIndex = -1;
+      let straightest = 1;
+      directions.forEach((_, index) => {
+        const others = directions.filter((__, other) => other !== index);
+        if (others.length !== 2) return;
+        const alignment = others[0].x * others[1].x + others[0].y * others[1].y;
+        if (alignment >= straightest) return;
+        straightest = alignment;
+        branchIndex = index;
+      });
+      return branchIndex;
+    }
+
+    function buildAappJointGlyph(node, directions, draw) {
+      const branchIndex = node.elementType === 'teeReducer' && directions.length === 3
+        ? getAappBranchIndex(directions)
+        : -1;
+      directions.forEach((direction, index) => {
+        const isBranch = index === branchIndex;
+        const scale = isBranch ? AAPP_BRANCH_SCALE : 1;
+        const bodyX = direction.x * AAPP_BODY_LENGTH * scale;
+        const bodyY = direction.y * AAPP_BODY_LENGTH * scale;
+        const tipX = direction.x * AAPP_ARM_LENGTH * scale;
+        const tipY = direction.y * AAPP_ARM_LENGTH * scale;
+        const flangeX = -direction.y * AAPP_FLANGE_HALF * scale;
+        const flangeY = direction.x * AAPP_FLANGE_HALF * scale;
+        draw(`accessory-body${isBranch ? ' branch' : ''}`,
+          `M 0 0 L ${bodyX.toFixed(2)} ${bodyY.toFixed(2)}`);
+        draw('accessory-flange',
+          `M ${(tipX - flangeX).toFixed(2)} ${(tipY - flangeY).toFixed(2)} `
+          + `L ${(tipX + flangeX).toFixed(2)} ${(tipY + flangeY).toFixed(2)}`);
+      });
+      if (node.elementType !== 'cap') return;
+      // El tapón cierra el tubo: placa ciega al lado opuesto de la conexión.
+      const direction = directions[0];
+      const plateX = -direction.x * 4.2;
+      const plateY = -direction.y * 4.2;
+      const halfX = -direction.y * (AAPP_FLANGE_HALF + 1.2);
+      const halfY = direction.x * (AAPP_FLANGE_HALF + 1.2);
+      draw('accessory-flange',
+        `M ${(plateX - halfX).toFixed(2)} ${(plateY - halfY).toFixed(2)} `
+        + `L ${(plateX + halfX).toFixed(2)} ${(plateY + halfY).toFixed(2)}`);
+    }
+
     function buildAappAccessory(node) {
       const group = E('g', {
         class: 'node aapp-accessory'
       });
       group.appendChild(E('circle', { class: 'accessory-hit', cx: 0, cy: 0, r: Math.max(8, node.radius + 3) }));
-      const path = value => group.appendChild(E('path', { class: 'accessory-glyph', d: value }));
-      const circle = radius => group.appendChild(E('circle', { class: 'accessory-glyph', cx: 0, cy: 0, r: radius }));
+      const jointDirections = AAPP_JOINT_TYPES.has(node.elementType)
+        ? getAappJointDirections(node)
+        : [];
+      if (jointDirections.length) {
+        buildAappJointGlyph(node, jointDirections, (className, value) =>
+          group.appendChild(E('path', { class: `accessory-glyph ${className}`, d: value })));
+        return group;
+      }
+
+      // Los accesorios en línea se alinean con el tubo; los rotulados quedan rectos.
+      const pipeDirection = AAPP_UPRIGHT_TYPES.has(node.elementType)
+        ? null
+        : getAappNearestPipeDirection(node);
+      // Cada hidrante lleva su válvula a 2,5 m: a tamaño pleno los dos símbolos
+      // se pisaban formando una mancha. Se dibujan menores y el zoom los agranda.
+      const deviceLayer = group.appendChild(E('g', { transform: `scale(${AAPP_DEVICE_SCALE})` }));
+      const glyphs = pipeDirection
+        ? deviceLayer.appendChild(E('g', {
+            transform: `rotate(${(Math.atan2(pipeDirection.y, pipeDirection.x) * 180 / Math.PI).toFixed(2)})`
+          }))
+        : deviceLayer;
+      const path = value => glyphs.appendChild(E('path', { class: 'accessory-glyph', d: value }));
+      const circle = radius => deviceLayer.appendChild(E('circle', { class: 'accessory-glyph', cx: 0, cy: 0, r: radius }));
       const text = value => {
         const label = E('text', { class: 'accessory-text', x: 0, y: .4 });
         label.textContent = value;
-        group.appendChild(label);
+        deviceLayer.appendChild(label);
       };
+
       switch (node.elementType) {
         case 'cap': path('M -4 -5 L -4 5 M -4 0 L 5 0'); break;
         case 'elbow90': path('M -6 4 L 1 4 L 1 -5'); break;
@@ -3521,6 +3781,7 @@
           nodeContainer = E('g', { transform: `translate(${n.x} ${n.y})` });
           shape = buildAappAccessory(n);
           nodeContainer.appendChild(shape);
+          aappAccessoryAnchors.push({ element: nodeContainer, x: n.x, y: n.y });
         } else if (n.elementType === 'sump') {
           shape = E('rect', {
             class: 'node sump',
@@ -3589,57 +3850,72 @@
           bottom: y + height / 2
         };
       };
+      // Los obstáculos se calculan una sola vez. Cada rótulo prueba decenas de
+      // posiciones y volver a muestrear las tuberías en cada intento no escala.
+      const nodeObstacles = nodeDefs.map(node => {
+        // El accesorio AAPP dibuja brazos con brida más allá de su radio nominal.
+        const radius = Math.max(NETWORK_TYPE === 'AAPP' ? 12 : 8, Number(node.radius) || 0);
+        return {
+          id: node.id,
+          left: node.x - radius,
+          right: node.x + radius,
+          top: node.y - radius,
+          bottom: node.y + radius
+        };
+      });
+      const pipeSampleGroups = [];
+      const distanceObstacles = [];
+      lineStates.forEach(state => {
+        const path = state.measurePath;
+        const total = path.getTotalLength();
+        const step = Math.max(1.5, total / 160);
+        const samples = [];
+        for (let length = 0; length <= total; length += step) {
+          const point = path.getPointAtLength(length);
+          samples.push({ x: point.x, y: point.y });
+        }
+        pipeSampleGroups.push(samples);
+        const distanceText = state.distanceGroup?.querySelector('.distance-text');
+        const distanceHit = state.distanceGroup?.querySelector('.distance-hit');
+        if (!distanceText) return;
+        const x = Number(distanceText.getAttribute('x'));
+        const y = Number(distanceText.getAttribute('y'));
+        const angle = Number(
+          state.distanceGroup?.getAttribute('transform')?.match(/rotate\(([-+\d.]+)/)?.[1] || 0
+        ) * Math.PI / 180;
+        const halfWidth = (Number(distanceHit?.getAttribute('width')) || 34) / 2;
+        const halfHeight = 10;
+        const extentX = Math.abs(Math.cos(angle)) * halfWidth + Math.abs(Math.sin(angle)) * halfHeight;
+        const extentY = Math.abs(Math.sin(angle)) * halfWidth + Math.abs(Math.cos(angle)) * halfHeight;
+        distanceObstacles.push({
+          left: x - extentX,
+          right: x + extentX,
+          top: y - extentY,
+          bottom: y + extentY
+        });
+      });
+
       const scoreLabelPosition = (candidateBounds, nodeId) => {
         let score = 0;
         placedLabelBounds.forEach(bounds => {
           if (intersects(candidateBounds, bounds, 5)) score += 3000;
         });
-        nodeDefs.forEach(node => {
-          if (node.id === nodeId) return;
-          const radius = Math.max(8, Number(node.radius) || 0);
-          const nodeBounds = {
-            left: node.x - radius,
-            right: node.x + radius,
-            top: node.y - radius,
-            bottom: node.y + radius
-          };
-          if (intersects(candidateBounds, nodeBounds, 5)) score += 1000;
+        nodeObstacles.forEach(bounds => {
+          if (bounds.id === nodeId) return;
+          if (intersects(candidateBounds, bounds, 5)) score += 1000;
         });
-        lineStates.forEach(state => {
-          const path = state.measurePath;
-          const total = path.getTotalLength();
-          const step = Math.max(1.5, total / 160);
-          let overlapsPipe = false;
-          for (let length = 0; length <= total; length += step) {
-            const point = path.getPointAtLength(length);
+        distanceObstacles.forEach(bounds => {
+          if (intersects(candidateBounds, bounds, 4)) score += 4000;
+        });
+        pipeSampleGroups.forEach(samples => {
+          for (const point of samples) {
             if (
               point.x >= candidateBounds.left - 5 && point.x <= candidateBounds.right + 5
               && point.y >= candidateBounds.top - 5 && point.y <= candidateBounds.bottom + 5
             ) {
-              overlapsPipe = true;
-              break;
+              score += 10000;
+              return;
             }
-          }
-          if (overlapsPipe) score += 10000;
-          const distanceText = state.distanceGroup?.querySelector('.distance-text');
-          const distanceHit = state.distanceGroup?.querySelector('.distance-hit');
-          if (distanceText) {
-            const x = Number(distanceText.getAttribute('x'));
-            const y = Number(distanceText.getAttribute('y'));
-            const angle = Number(
-              state.distanceGroup?.getAttribute('transform')?.match(/rotate\(([-+\d.]+)/)?.[1] || 0
-            ) * Math.PI / 180;
-            const halfWidth = (Number(distanceHit?.getAttribute('width')) || 34) / 2;
-            const halfHeight = 10;
-            const extentX = Math.abs(Math.cos(angle)) * halfWidth + Math.abs(Math.sin(angle)) * halfHeight;
-            const extentY = Math.abs(Math.sin(angle)) * halfWidth + Math.abs(Math.cos(angle)) * halfHeight;
-            const distanceBounds = {
-              left: x - extentX,
-              right: x + extentX,
-              top: y - extentY,
-              bottom: y + extentY
-            };
-            if (intersects(candidateBounds, distanceBounds, 4)) score += 4000;
           }
         });
         return score;
@@ -3688,8 +3964,36 @@
           x = best.x;
           y = best.y;
         } else {
-          const p = nodeMap.get(n.parent) || { x: x - 1, y }; const dx = x - p.x, dy = y - p.y; const len = Math.hypot(dx,dy) || 1;
-          x += dx / len * 24; y += dy / len * 16;
+          // Antes se aplicaba un desplazamiento fijo sin comprobar nada, y en AAPP
+          // todos los rótulos caían a la derecha, encima de tuberías y accesorios.
+          const candidates = [];
+          const parent = nodeMap.get(n.parent);
+          if (parent) {
+            const dx = x - parent.x;
+            const dy = y - parent.y;
+            const length = Math.hypot(dx, dy) || 1;
+            candidates.push([dx / length * 24, dy / length * 16]);
+          }
+          const radius = Math.max(10, Number(n.radius) || 0);
+          [radius + 14, radius + 26, radius + 40].forEach(distance => {
+            for (let step = 0; step < 12; step += 1) {
+              const angle = (step / 12) * Math.PI * 2;
+              // Más holgura horizontal: el rótulo es más ancho que alto.
+              candidates.push([Math.cos(angle) * distance * 1.45, Math.sin(angle) * distance]);
+            }
+          });
+          let best = candidates[0];
+          let bestScore = Infinity;
+          for (const [dx, dy] of candidates) {
+            const candidateScore = scoreLabelPosition(boundsAt(x + dx, y + dy, labelValue, cls), n.id);
+            if (candidateScore < bestScore) {
+              bestScore = candidateScore;
+              best = [dx, dy];
+            }
+            if (bestScore === 0) break;
+          }
+          x += best[0];
+          y += best[1];
         }
         const text = E('text', {
           class:`node-label ${cls}`,
@@ -3751,6 +4055,7 @@
     }
 
     buildNodes();
+    updateAccessoryZoom();
     lineDefs.forEach(buildLine);
     layoutBranchDistanceLabels();
     placeLabels();
@@ -3829,6 +4134,7 @@
     cancelSearchButton.addEventListener('click', closeSearchModal);
     searchForm.addEventListener('submit', submitSearch);
     enableDayFirstDateInput(activityDateInput);
+    addCalendarPicker(activityDateInput);
     groupActivitiesButton.addEventListener('click', groupSelectedActivities);
     groupActivitiesButton.addEventListener('keydown', event => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -4612,11 +4918,11 @@ renderComments();
 </style>
 <script>
 (function() {
-  // Este lindero pertenece al modelo incorporado Costanera_acacias_AALL.
-  if (!nodeMap.has('CAM_AL_24')) return;
-
   const LINDERO_LAYER_SETTINGS_KEY = 'redVerde_costanera_lindero_layers_v3';
   const siteGeometry = globalThis.RED_NETWORK_SITE_GEOMETRY;
+  // El terreno se dibuja para cualquier modelo que traiga lindero georreferenciado.
+  // Costanera AALL es anterior al campo y se reconoce por su cámara CAM_AL_24.
+  if (!Array.isArray(siteGeometry?.boundary?.points) && !nodeMap.has('CAM_AL_24')) return;
   // Vertices reconstruidos en el mismo marco CAD de la red a partir del PDF
   // conjunto. Las coordenadas UTM se conservan como fuente geodesica.
   const legacyLinderoPoints = [
@@ -4884,9 +5190,9 @@ renderComments();
 })();
 </script>
 
-  <script src="./costanera-acacias-aall.js?v=3"></script>
-<script src="./costanera-acacias-aapp.js?v=2"></script>
-<script src="./version-manager.js?v=7"></script>
+  <script src="./costanera-acacias-aall.js?v=4"></script>
+<script src="./costanera-acacias-aapp.js?v=3"></script>
+<script src="./version-manager.js?v=8"></script>
 <script src="./firebase-config.js"></script>
 <script type="module" src="./firebase-sync.js"></script>
 </body>

@@ -3954,7 +3954,11 @@
     }
   }
 };
-  if (!project.snapshot.network.definition && typeof NETWORK_DEFINITION !== "undefined") {
+  // NETWORK_DEFINITION es la del modelo abierto en ese momento. Adoptarla sin
+  // comprobar el tipo sellaba este modelo con las reglas de otra red.
+  if (!project.snapshot.network.definition
+    && typeof NETWORK_DEFINITION !== "undefined"
+    && NETWORK_DEFINITION?.type === project.networkType) {
     project.snapshot.network.definition = JSON.parse(JSON.stringify(NETWORK_DEFINITION));
   }
   window.RED_NETWORK_BUILTIN_PROJECTS = Object.freeze([project]);
