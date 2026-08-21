@@ -1,3 +1,14 @@
 # Archivos temporales generados localmente.
 tmp/
 99_temporal/
+
+# Memoria e instrucciones locales de los asistentes.
+.claude/
+AGENTS.md
+CONTEXTO_SESION.md
+
+# Entregables y cachés generados durante las iteraciones locales.
+output/
+tools/__pycache__/
+tools/generar_borrador_avance_visual.py
+tools/generar_borrador_avance_visual_v2.py

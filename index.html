@@ -106,6 +106,7 @@
     /* AAPP usa el mismo negro que AALL; el diámetro se distingue por el grosor. */
     .base-line.aapp-110 { stroke-width: 4.6; }
     .base-line.aapp-90, .base-line.aapp-200 { stroke-width: 3.5; }
+    .hydrant-outlet { fill: none; stroke: #111; stroke-width: 3.5; stroke-linecap: round; pointer-events: none; }
     .segment-overlay { stroke: #16a34a; stroke-width: 6; stroke-linecap: butt; pointer-events: none; opacity: 0; transition: opacity .12s ease; }
     .segment-overlay.branch { stroke-width: 4.2; }
     .segment-overlay.active { opacity: 1; }
@@ -153,7 +154,7 @@
     .distance-text { font-weight: 700; fill: #6b7280; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: #fafafa; stroke-width: 3.5px; stroke-linejoin: round; opacity: .85; }
     .distance-text.collector { font-size: 11px; }
     .distance-text.branch { font-size: 9px; opacity: .62; }
-    /* En AAPP la cota se lee en obra: horizontal, opaca y con el tramo nombrado. */
+    /* En AAPP la cota se lee en obra: opaca, limpia y ligada a su tubería. */
     .distance-plate { fill: #fff; stroke: #cbd5e1; stroke-width: .8; }
     .distance-leader { stroke: #64748b; stroke-width: .9; fill: none; pointer-events: none; }
     html[data-theme="night"] .distance-leader { stroke: #94a3b8; }
@@ -1079,6 +1080,10 @@
     const lineDefs = [{"id": "C_CA1_CA2", "name": "CA1-CA2", "from": "CA1", "to": "CA2", "meters": 38.87, "provisional": false, "kind": "collector", "d": "M 238.11 142.26 L 238.16 378.15", "hasDistance": true}, {"id": "C_CA2_CA3", "name": "CA2-CA3", "from": "CA2", "to": "CA3", "meters": 38.85, "provisional": false, "kind": "collector", "d": "M 238.16 378.15 L 238.17 613.94", "hasDistance": true}, {"id": "C_CA3_CA4", "name": "CA3-CA4", "from": "CA3", "to": "CA4", "meters": 38.95, "provisional": false, "kind": "collector", "d": "M 238.17 613.94 L 238.19 850.31", "hasDistance": true}, {"id": "C_CA4_CA5", "name": "CA4-CA5", "from": "CA4", "to": "CA5", "meters": 38.78, "provisional": false, "kind": "collector", "d": "M 238.19 850.31 L 238.14 1085.72", "hasDistance": true}, {"id": "C_CA7_CA8", "name": "CA7-CA8", "from": "CA7", "to": "CA8", "meters": 32.08, "provisional": false, "kind": "collector", "d": "M 731.01 122.09 L 764.74 356.6", "hasDistance": true}, {"id": "C_CA8_CA9", "name": "CA8-CA9", "from": "CA8", "to": "CA9", "meters": 38.86, "provisional": false, "kind": "collector", "d": "M 764.74 356.6 L 798.84 591.1", "hasDistance": true}, {"id": "C_CA9_CA10", "name": "CA9-CA10", "from": "CA9", "to": "CA10", "meters": 38.87, "provisional": false, "kind": "collector", "d": "M 798.84 591.1 L 833.78 825.61", "hasDistance": true}, {"id": "C_CA10_CA11", "name": "CA10-CA11", "from": "CA10", "to": "CA11", "meters": 38.85, "provisional": false, "kind": "collector", "d": "M 833.78 825.61 L 867.41 1060.19", "hasDistance": true}, {"id": "C_CA5_CA11", "name": "CA5-CA11", "from": "CA5", "to": "CA11", "meters": 78.58, "provisional": false, "kind": "collector", "d": "M 238.14 1085.72 L 867.41 1060.19", "hasDistance": true}, {"id": "C_CA5_EXT_L", "name": "CA5-X31", "from": "CA5", "to": "X31", "meters": 38.81, "provisional": false, "kind": "collector", "d": "M 238.14 1085.72 L 238.31 1351.48", "hasDistance": true}, {"id": "C_CA11_EXT_R", "name": "CA11-X32", "from": "CA11", "to": "X32", "meters": 38.85, "provisional": false, "kind": "collector", "d": "M 867.41 1060.19 L 893.74 1324.84", "hasDistance": true}, {"id": "T_CA1_CA1_1", "name": "CA1-X1", "from": "CA1", "to": "X1", "meters": 6.52, "provisional": false, "kind": "branch", "d": "M 238.11 142.26 L 288.48 80.15", "hasDistance": true}, {"id": "T_CA1_CA1_2", "name": "CA1-X2", "from": "CA1", "to": "X2", "meters": 5.27, "provisional": false, "kind": "branch", "d": "M 238.11 142.26 L 166.52 149.92", "hasDistance": true}, {"id": "T_CA1_CA1_3", "name": "CA1-X3", "from": "CA1", "to": "X3", "meters": 6.04, "provisional": false, "kind": "branch", "d": "M 238.11 142.26 L 282.81 201.92", "hasDistance": true}, {"id": "T_CA5_CA5_1", "name": "CA5-X4", "from": "CA5", "to": "X4", "meters": 6.57, "provisional": false, "kind": "branch", "d": "M 238.14 1085.72 L 286.41 1021.89", "hasDistance": true}, {"id": "T_CA5_CA5_2", "name": "CA5-X5", "from": "CA5", "to": "X5", "meters": 5.9, "provisional": false, "kind": "branch", "d": "M 238.14 1085.72 L 284.86 1142.63", "hasDistance": true}, {"id": "T_CA5_CA5_3", "name": "CA5-X6", "from": "CA5", "to": "X6", "meters": 5.43, "provisional": false, "kind": "branch", "d": "M 238.14 1085.72 L 167.38 1099.0", "hasDistance": true}, {"id": "T_CA2_CA2_1", "name": "CA2-X7", "from": "CA2", "to": "X7", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.16 378.15 L 285.89 312.08", "hasDistance": false}, {"id": "T_CA2_CA2_2", "name": "CA2-X8", "from": "CA2", "to": "X8", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.16 378.15 L 287.44 431.28", "hasDistance": false}, {"id": "T_CA2_CA2_3", "name": "CA2-X9", "from": "CA2", "to": "X9", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.16 378.15 L 166.37 383.67", "hasDistance": false}, {"id": "T_CA3_CA3_1", "name": "CA3-X10", "from": "CA3", "to": "X10", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.17 613.94 L 286.39 549.25", "hasDistance": false}, {"id": "T_CA3_CA3_2", "name": "CA3-X11", "from": "CA3", "to": "X11", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.17 613.94 L 284.85 669.99", "hasDistance": false}, {"id": "T_CA3_CA3_3", "name": "CA3-X12", "from": "CA3", "to": "X12", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.17 613.94 L 166.21 611.51", "hasDistance": false}, {"id": "T_CA4_CA4_1", "name": "CA4-X13", "from": "CA4", "to": "X13", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.19 850.31 L 287.43 786.95", "hasDistance": false}, {"id": "T_CA4_CA4_2", "name": "CA4-X14", "from": "CA4", "to": "X14", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.19 850.31 L 284.33 906.66", "hasDistance": false}, {"id": "T_CA4_CA4_3", "name": "CA4-X15", "from": "CA4", "to": "X15", "meters": null, "provisional": false, "kind": "branch", "d": "M 238.19 850.31 L 166.79 841.06", "hasDistance": false}, {"id": "T_CA7_CA7_1", "name": "CA7-X16", "from": "CA7", "to": "X16", "meters": null, "provisional": false, "kind": "branch", "d": "M 731.01 122.09 L 667.86 76.53", "hasDistance": false}, {"id": "T_CA7_CA7_2", "name": "CA7-X17", "from": "CA7", "to": "X17", "meters": null, "provisional": false, "kind": "branch", "d": "M 731.01 122.09 L 802.79 127.73", "hasDistance": false}, {"id": "T_CA7_CA7_3", "name": "CA7-X18", "from": "CA7", "to": "X18", "meters": null, "provisional": false, "kind": "branch", "d": "M 731.01 122.09 L 681.24 174.12", "hasDistance": false}, {"id": "T_CA8_CA8_1", "name": "CA8-X19", "from": "CA8", "to": "X19", "meters": null, "provisional": false, "kind": "branch", "d": "M 764.74 356.6 L 705.89 307.6", "hasDistance": false}, {"id": "T_CA8_CA8_2", "name": "CA8-X20", "from": "CA8", "to": "X20", "meters": null, "provisional": false, "kind": "branch", "d": "M 764.74 356.6 L 828.79 389.5", "hasDistance": false}, {"id": "T_CA8_CA8_3", "name": "CA8-X21", "from": "CA8", "to": "X21", "meters": null, "provisional": false, "kind": "branch", "d": "M 764.74 356.6 L 712.55 406.2", "hasDistance": false}, {"id": "T_CA9_CA9_1", "name": "CA9-X22", "from": "CA9", "to": "X22", "meters": 6.31, "provisional": false, "kind": "branch", "d": "M 798.84 591.1 L 739.65 541.76", "hasDistance": true}, {"id": "T_CA9_CA9_2", "name": "CA9-X23", "from": "CA9", "to": "X23", "meters": 4.06, "provisional": false, "kind": "branch", "d": "M 798.84 591.1 L 855.01 636.14", "hasDistance": true}, {"id": "T_CA9_CA9_3", "name": "CA9-X24", "from": "CA9", "to": "X24", "meters": 5.77, "provisional": false, "kind": "branch", "d": "M 798.84 591.1 L 754.5 647.83", "hasDistance": true}, {"id": "T_CA10_CA10_1", "name": "CA10-X25", "from": "CA10", "to": "X25", "meters": null, "provisional": false, "kind": "branch", "d": "M 833.78 825.61 L 773.6 775.41", "hasDistance": false}, {"id": "T_CA10_CA10_2", "name": "CA10-X26", "from": "CA10", "to": "X26", "meters": null, "provisional": false, "kind": "branch", "d": "M 833.78 825.61 L 905.38 833.24", "hasDistance": false}, {"id": "T_CA10_CA10_3", "name": "CA10-X27", "from": "CA10", "to": "X27", "meters": null, "provisional": false, "kind": "branch", "d": "M 833.78 825.61 L 789.23 882.17", "hasDistance": false}, {"id": "T_CA11_CA11_1", "name": "CA11-X28", "from": "CA11", "to": "X28", "meters": null, "provisional": false, "kind": "branch", "d": "M 867.41 1060.19 L 806.5 1009.0", "hasDistance": false}, {"id": "T_CA11_CA11_2", "name": "CA11-X29", "from": "CA11", "to": "X29", "meters": null, "provisional": false, "kind": "branch", "d": "M 867.41 1060.19 L 934.19 1033.26", "hasDistance": false}, {"id": "T_CA11_CA11_3", "name": "CA11-X30", "from": "CA11", "to": "X30", "meters": null, "provisional": false, "kind": "branch", "d": "M 867.41 1060.19 L 820.23 1114.58", "hasDistance": false}];
     const routeEdges = [{"lineId": "C_CA1_CA2", "from": "CA1", "to": "CA2"}, {"lineId": "C_CA2_CA3", "from": "CA2", "to": "CA3"}, {"lineId": "C_CA3_CA4", "from": "CA3", "to": "CA4"}, {"lineId": "C_CA4_CA5", "from": "CA4", "to": "CA5"}, {"lineId": "C_CA7_CA8", "from": "CA7", "to": "CA8"}, {"lineId": "C_CA8_CA9", "from": "CA8", "to": "CA9"}, {"lineId": "C_CA9_CA10", "from": "CA9", "to": "CA10"}, {"lineId": "C_CA10_CA11", "from": "CA10", "to": "CA11"}, {"lineId": "C_CA5_CA11", "from": "CA5", "to": "CA11"}];
 
+    const hydrantOutletDefs = Array.isArray(versionBootstrap?.network?.hydrantOutlets)
+      ? versionBootstrap.network.hydrantOutlets
+      : [];
+
     if (versionBootstrap?.network) {
       if (Array.isArray(versionBootstrap.network.nodes) && versionBootstrap.network.nodes.length) {
         nodeDefs.splice(0, nodeDefs.length, ...versionBootstrap.network.nodes);
@@ -1836,11 +1841,12 @@
       const m = run?.labelPoint
         ? closestLengthOnPath(measure, run.labelPoint)
         : total / 2;
-      // En obra la cota tiene que decir de qué tramo habla y leerse derecha.
+      // La longitud pertenece a la segmentación por accesorios. El código AP
+      // original es una referencia de búsqueda, no parte de la cota.
       const flat = NETWORK_TYPE === 'AAPP';
-      const runName = run && !/^AP-GEO/.test(run.identifier || '') ? run.identifier : '';
+      const runName = '';
       const measureValue = `${formatLength(labelMeters)} m`;
-      const textValue = flat && runName ? `${runName} · ${measureValue}` : measureValue;
+      const textValue = measureValue;
       const width = Math.max(24, textValue.length * (flat ? 4.0 : 7.8));
       let p = measure.getPointAtLength(m);
       let before = measure.getPointAtLength(Math.max(0, m - 2));
@@ -1931,6 +1937,7 @@
       });
       if (flat) {
         group.dataset.ownTransform = `rotate(${deg.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)})`;
+        group.dataset.runMeters = String(labelMeters);
         group.dataset.plateBox = JSON.stringify({
           x, y, deg, width, height,
           anchorX: p.x, anchorY: p.y
@@ -2406,6 +2413,9 @@
     // Separación mínima entre accesorios contiguos, en unidades de dibujo.
     // Separación uniforme entre la tubería y su cota.
     const DIMENSION_OFFSET = 15;
+    const AAPP_SHORT_LABEL_METERS = 15;
+    const AAPP_LABEL_FONT_UNITS = 6.9;
+    const AAPP_MIN_READABLE_LABEL_PX = 8.5;
     const DRAWING_UNITS_PER_METER =
       Number(activeNetworkGeoreference?.displayOrigin?.unitsPerMeter) || 3.2;
     const ACCESSORY_MIN_EDGE = 21;
@@ -2591,6 +2601,22 @@
       applyBranchStretch();
       updateGuideVisibility();
       updateAccessoryZoom();
+      updateDistanceLabelVisibility();
+    }
+
+    function updateDistanceLabelVisibility() {
+      if (NETWORK_TYPE !== 'AAPP') return;
+      const renderedWidth = svg.getBoundingClientRect().width || viewport.clientWidth || 1;
+      const fontPixels = AAPP_LABEL_FONT_UNITS * renderedWidth / currentViewBox.width;
+      const shortLabelsReadable = fontPixels >= AAPP_MIN_READABLE_LABEL_PX;
+      distanceLabelsGroup.querySelectorAll('.distance-group.flat').forEach(group => {
+        const meters = Number(group.dataset.runMeters);
+        const visible = !(Number.isFinite(meters)
+          && meters < AAPP_SHORT_LABEL_METERS
+          && !shortLabelsReadable);
+        group.style.display = visible ? '' : 'none';
+        group.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      });
     }
 
     // Los accesorios están a tamaño de plano: vistos de lejos se amontonan y
@@ -3047,7 +3073,10 @@
     }
 
     function getSearchTargets() {
-      const targets = nodeDefs.map(node => ({
+      const searchableNodes = NETWORK_TYPE === 'AAPP'
+        ? nodeDefs.filter(node => !node.hidden)
+        : nodeDefs;
+      const targets = searchableNodes.map(node => ({
         kind: 'node',
         id: node.id,
         node,
@@ -3055,6 +3084,27 @@
         description: getNodeTypeLabel(node),
         aliases: [node.displayName, node.id].filter(Boolean)
       }));
+
+      if (NETWORK_TYPE === 'AAPP' && runDefs.length) {
+        runDefs.forEach(run => {
+          const state = (run.lines || []).map(lineId => lineStates.get(lineId)).find(Boolean);
+          if (!state) return;
+          const references = [...new Set((run.planReferences || [])
+            .map(reference => reference?.identifier)
+            .filter(Boolean))];
+          targets.push({
+            kind: 'run',
+            id: run.id,
+            run,
+            state,
+            value: references[0] || run.id,
+            description: `Tramo ${run.diameter} mm · ${formatLength(run.meters)} m`,
+            aliases: [...references, run.id, ...(run.lines || [])].filter(Boolean),
+            suggestions: references.length ? references : [run.id]
+          });
+        });
+        return targets;
+      }
 
       lineStates.forEach(state => {
         const definition = state.definition;
@@ -3077,13 +3127,15 @@
       searchSuggestions.innerHTML = '';
       const used = new Set();
       getSearchTargets().forEach(target => {
-        const key = normalizeSearchId(target.value);
-        if (!key || used.has(key)) return;
-        used.add(key);
-        const option = document.createElement('option');
-        option.value = target.value;
-        option.label = target.description;
-        searchSuggestions.appendChild(option);
+        (target.suggestions || [target.value]).forEach(value => {
+          const key = normalizeSearchId(value);
+          if (!key || used.has(key)) return;
+          used.add(key);
+          const option = document.createElement('option');
+          option.value = value;
+          option.label = target.description;
+          searchSuggestions.appendChild(option);
+        });
       });
     }
 
@@ -3125,7 +3177,7 @@
 
     function getSearchTargetPoint(target) {
       const stretchFactor = getBranchStretchFactorForWidth(SEARCH_VIEW_BOX_WIDTH);
-      if (target.kind === 'line') {
+      if (target.kind === 'line' || target.kind === 'run') {
         const state = target.state;
         const midpoint = state.measurePath.getPointAtLength(state.totalSvgLength / 2);
         return stretchBranchPoint(state.definition, midpoint, stretchFactor);
@@ -3144,13 +3196,18 @@
     let searchHighlightTimer = null;
     function highlightSearchTarget(target) {
       document.querySelectorAll('.search-target').forEach(element => element.classList.remove('search-target'));
-      const element = target.kind === 'line'
-        ? target.state.hitPath
-        : [...nodesGroup.querySelectorAll('[data-node-id]')].find(node => node.dataset.nodeId === target.id);
-      if (!element) return;
-      element.classList.add('search-target');
+      const elements = target.kind === 'run'
+        ? (target.run.lines || []).map(lineId => lineStates.get(lineId)?.hitPath).filter(Boolean)
+        : [target.kind === 'line'
+            ? target.state.hitPath
+            : [...nodesGroup.querySelectorAll('[data-node-id]')].find(node => node.dataset.nodeId === target.id)]
+          .filter(Boolean);
+      if (!elements.length) return;
+      elements.forEach(element => element.classList.add('search-target'));
       if (searchHighlightTimer) clearTimeout(searchHighlightTimer);
-      searchHighlightTimer = setTimeout(() => element.classList.remove('search-target'), 2200);
+      searchHighlightTimer = setTimeout(() => {
+        elements.forEach(element => element.classList.remove('search-target'));
+      }, 2200);
     }
 
     function focusSearchTarget(target) {
@@ -3497,9 +3554,8 @@
       checkVictory();
     }
 
-    // Convención uniforme para todas las cotas: misma inclinación que su
-    // tubería, centradas en el tramo y al mismo lado. Solo se apartan cuando
-    // chocan de verdad, y en ese caso por el camino más corto.
+    // Las cotas siguen la inclinación de su tubería. En tuberías paralelas o
+    // muy próximas se alternan de lado siempre que la alternativa quede libre.
     function layoutFlatDistanceLabels() {
       if (NETWORK_TYPE !== 'AAPP') return;
       const intersects = (a, b, padding = 0) => !(
@@ -3592,6 +3648,27 @@
           awayX = -awayX; awayY = -awayY;
         }
 
+        // Si otra tubería casi paralela ya recibió cota cerca de este punto,
+        // preferimos el lado contrario para despejar el corredor entre ambas.
+        const nearbyParallel = placed
+          .map(other => {
+            const angleDelta = Math.abs(box.deg - other.deg) % 180;
+            const parallelAngle = Math.min(angleDelta, 180 - angleDelta);
+            const deltaX = other.anchorX - box.anchorX;
+            const deltaY = other.anchorY - box.anchorY;
+            return {
+              other,
+              parallelAngle,
+              perpendicular: Math.abs(deltaX * awayX + deltaY * awayY),
+              along: Math.abs(deltaX * alongX + deltaY * alongY),
+              distance: Math.hypot(deltaX, deltaY)
+            };
+          })
+          .filter(item => item.parallelAngle <= 8
+            && item.perpendicular <= 45
+            && item.along <= 110)
+          .sort((first, second) => first.distance - second.distance)[0]?.other || null;
+
         // Ante un choque se prefiere correr la cota a lo largo de su propio
         // tramo: así conserva la separación de convención. Cambiar de lado o
         // alejarse solo se admite si no queda sitio.
@@ -3616,26 +3693,39 @@
         candidates.sort((first, second) => first.cost - second.cost);
 
         let best = [0, 0];
+        let bestSide = 1;
         let bestScore = Infinity;
         for (const candidate of candidates) {
           const moved = rotatedBounds(box, candidate.dx, candidate.dy);
           let score = candidate.cost;
+          const sideDistance = (box.x - box.anchorX) * awayX
+            + (box.y - box.anchorY) * awayY
+            + candidate.dx * awayX + candidate.dy * awayY;
+          const sideSign = sideDistance < 0 ? -1 : 1;
+          if (nearbyParallel && sideSign === nearbyParallel.sideSign) score += 180;
           // Tapar una tubería es lo peor que puede pasar: pesa más que nada.
           if (coversPipe(box, candidate.dx, candidate.dy)) score += 4000;
-          placed.forEach(other => { if (intersects(moved, other, 2)) score += 1000; });
+          placed.forEach(other => { if (intersects(moved, other.bounds, 2)) score += 1000; });
           accessoryBoxes.forEach(other => { if (intersects(moved, other)) score += 250; });
           if (score >= bestScore) continue;
           bestScore = score;
           best = [candidate.dx, candidate.dy];
+          bestSide = sideSign;
           if (score === candidate.cost && candidate.cost === 0) break;
         }
 
-        placed.push(rotatedBounds(box, best[0], best[1]));
+        placed.push({
+          bounds: rotatedBounds(box, best[0], best[1]),
+          anchorX: box.anchorX,
+          anchorY: box.anchorY,
+          deg: box.deg,
+          sideSign: bestSide
+        });
 
         // Si la cota tuvo que apartarse, una línea fina la ata a su tramo.
         group.querySelector('.distance-leader')?.remove();
         const shift = Math.hypot(box.x + best[0] - box.anchorX, box.y + best[1] - box.anchorY);
-        if (shift > DIMENSION_OFFSET * 1.8) {
+        if (shift > box.height / 2 + 1) {
           // El punto medio del tramo, visto desde los ejes propios de la placa.
           const radians = -box.deg * Math.PI / 180;
           const cos = Math.cos(radians);
@@ -3957,7 +4047,21 @@
       );
     }
 
+    function buildHydrantOutlets() {
+      hydrantOutletDefs.forEach(outlet => {
+        const start = outlet?.start;
+        const end = outlet?.renderEnd || outlet?.end;
+        if (![start?.x, start?.y, end?.x, end?.y].every(Number.isFinite)) return;
+        baseLinesGroup.appendChild(E('path', {
+          class: 'hydrant-outlet',
+          d: `M ${start.x} ${start.y} L ${end.x} ${end.y}`,
+          'data-hydrant-id': outlet.hydrantId || ''
+        }));
+      });
+    }
+
     function buildLine(def) {
+      if (def.visualHidden) return;
       const branch = def.kind === 'branch';
       const connectsDischarge = [def.from, def.to].some(nodeId =>
         nodeMap.get(nodeId)?.elementType === 'discharge'
@@ -4101,6 +4205,7 @@
     // Válvulas, hidrantes y medidores: separación real de 8 unidades entre un
     // hidrante y su válvula, así que el símbolo no puede pasar de 4 de radio.
     const AAPP_DEVICE_SCALE = .55;
+    const AAPP_HYDRANT_SCALE = 1.05;
     // Accesorios que son extremo de tubería: se arman siguiendo la dirección real
     // de los tubos que llegan, para que el codo o la tee se lean como en el plano.
     const AAPP_JOINT_TYPES = new Set([
@@ -4240,9 +4345,10 @@
       const pipeDirection = AAPP_UPRIGHT_TYPES.has(node.elementType)
         ? null
         : getAappNearestPipeDirection(node);
-      // Cada hidrante lleva su válvula a 2,5 m: a tamaño pleno los dos símbolos
-      // se pisaban formando una mancha. Se dibujan menores y el zoom los agranda.
-      const deviceLayer = group.appendChild(E('g', { transform: `scale(${AAPP_DEVICE_SCALE})` }));
+      // Los aparatos pequeños se mantienen compactos. El hidrante simplificado
+      // se deja mayor porque su círculo H es el identificador principal.
+      const deviceScale = node.elementType === 'hydrant' ? AAPP_HYDRANT_SCALE : AAPP_DEVICE_SCALE;
+      const deviceLayer = group.appendChild(E('g', { transform: `scale(${deviceScale})` }));
       const glyphs = pipeDirection
         ? deviceLayer.appendChild(E('g', {
             transform: `rotate(${(Math.atan2(pipeDirection.y, pipeDirection.x) * 180 / Math.PI).toFixed(2)})`
@@ -4270,7 +4376,7 @@
         case 'checkValve': path('M -6 5 L 0 -5 L 6 5 M 0 -5 L 0 6'); break;
         case 'regulator': circle(6); text('R'); break;
         case 'airValve': path('M -6 -6 L 6 -6 L 6 6 L -6 6 Z'); group.appendChild(E('circle', { class: 'accessory-fill', cx: 0, cy: 0, r: 1.5 })); break;
-        case 'hydrant': circle(7); text('H'); break;
+        case 'hydrant': circle(8.5); text('H'); break;
         case 'macroMeter': circle(7); text('MD'); break;
         case 'reducer': path('M -7 -4 L 0 0 L -7 4 M 7 -4 L 0 0 L 7 4'); break;
         default: circle(6); text('?');
@@ -4616,6 +4722,7 @@
 
     computeAappSpread();
     buildNodes();
+    buildHydrantOutlets();
     lineDefs.forEach(buildLine);
     layoutFlatDistanceLabels();
     layoutBranchDistanceLabels();
@@ -5753,7 +5860,7 @@ renderComments();
 </script>
 
   <script src="./costanera-acacias-aall.js?v=4"></script>
-<script src="./costanera-acacias-aapp.js?v=10"></script>
+<script src="./costanera-acacias-aapp.js?v=16"></script>
 <script src="./version-manager.js?v=8"></script>
 <script src="./firebase-config.js"></script>
 <script type="module" src="./firebase-sync.js"></script>

@@ -11,10 +11,20 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def load_project() -> dict:
     source = (ROOT / "costanera-acacias-aall.js").read_text(encoding="utf-8")
-    match = re.search(r"const project = (\{.*?\n\});\n  if", source, re.S)
+    match = re.search(r"\bconst\s+project\s*=\s*", source)
     if not match:
-        raise AssertionError("No se encontró el proyecto incorporado")
-    return json.loads(match.group(1))
+        raise AssertionError("No se encontró la declaración del proyecto incorporado")
+
+    start = match.end()
+    while start < len(source) and source[start].isspace():
+        start += 1
+
+    try:
+        project, _ = json.JSONDecoder().raw_decode(source, start)
+    except json.JSONDecodeError as error:
+        raise AssertionError("No se pudo leer el proyecto incorporado") from error
+
+    return project
 
 
 def main() -> None:
